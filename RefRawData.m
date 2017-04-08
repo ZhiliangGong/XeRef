@@ -26,11 +26,12 @@ classdef RefRawData < handle
             
         end
         
-        function r = getFresnelReflectivity(q, qc, qoff)
+        function d = goodData(this)
             
-            qz = q - qoff;
-            r_fres = (qz - sqrt(qz.^2 - ones(size(qz)) * qc^2)) ./ (qz + sqrt(qz.^2 - ones(size(qz)) * qc^2));
-            r = double(r_fres .* conj(r_fres));
+            sel = this.q > this.qcut;
+            d.q = this.q(sel);
+            d.ref = this.ref(sel);
+            d.err = this.err(sel);
             
         end
         

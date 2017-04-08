@@ -10,7 +10,7 @@ classdef XeRef < handle
     
     methods
         
-        function this = XeRef()
+        function this = XeRef(files)
             
             createView();
             createController();
@@ -71,8 +71,8 @@ classdef XeRef < handle
                 
                 function createAxes()
                     
-                    this.gui.showError = uicontrol(this.handles, 'Style','checkbox','String','Show Error','Units','normalized','Visible','on',...
-                        'Position',[0.6 0.965 0.1 0.018]);
+                    this.gui.normalized = uicontrol(this.handles, 'Style','checkbox','String','Normalized','Units','normalized','Visible','on',...
+                        'Position',[0.6 0.94 0.1 0.018], 'Value', 1);
                     
                     this.gui.likelihoodChi2 = uicontrol(this.handles,'Style','popupmenu','String',{'Likelihood','Chi^2'},'Visible','off',...
                         'Units','normalized',...
@@ -84,7 +84,7 @@ classdef XeRef < handle
                     this.gui.showFit = uicontrol(this.handles,'Style','checkbox','String','Show Fit','Units','normalized',...
                         'Position',[0.54 0.437 0.06 0.018]);
                     
-                    ax1 = axes('Parent',this.handles,'Units','normalized','Position',[0.215 0.52 0.45 0.44]);
+                    ax1 = axes('Parent',this.handles,'Units','normalized','Position',[0.215 0.52 0.38 0.44]);
                     ax1.XLim = [0 10];
                     ax1.YLim = [0 10];
                     ax1.XTick = [0 2 4 6 8 10];
@@ -95,7 +95,7 @@ classdef XeRef < handle
                     this.gui.ax1 = ax1;
                     
                     % plot region 2
-                    ax2 = axes('Parent',this.handles,'Units','normalized','Position',[0.215 0.08 0.45 0.35]);
+                    ax2 = axes('Parent',this.handles,'Units','normalized','Position',[0.215 0.08 0.38 0.35]);
                     ax2.XLim = [0 10];
                     ax2.YLim = [0 10];
                     ax2.XTick = [0 2 4 6 8 10];
@@ -119,7 +119,12 @@ classdef XeRef < handle
                 
                 this.gui.loadData.Callback = @(varargin) this.control('load-data');
                 this.gui.dataFiles.Callback = @(varargin) this.control('choose-data');
+                this.gui.normalized.Callback = @(varargin) this.control('toggle-fresnel');
                 
+            end
+            
+            if nargin == 1
+                this.control('load-data', files);
             end
             
         end
@@ -132,7 +137,7 @@ classdef XeRef < handle
                 case 'empty'
                     switch trigger
                         case 'load-data'
-                            this.model(state, trigger);
+                            this.model(state, trigger, varargin);
                             this.view(state, trigger);
                         otherwise
                             disp('State: %s, trigger: %s is not found for the controller', state, trigger);
@@ -143,6 +148,8 @@ classdef XeRef < handle
                             this.model(state, trigger);
                             this.view(state, trigger);
                         case 'choose-data'
+                            this.view(state, trigger);
+                        case 'toggle-fresnel'
                             this.view(state, trigger);
                     end
                 otherwise
@@ -169,7 +176,12 @@ classdef XeRef < handle
                 case 'empty'
                     switch trigger
                         case 'load-data'
-                            loadNewData();
+                            if nargin == 4
+                                datafiles = varargin{1};
+                                loadNewData(datafiles);
+                            else
+                                loadNewData();
+                            end
                     end
                 case 'inspect'
                     switch trigger
@@ -180,23 +192,33 @@ classdef XeRef < handle
                     sprintf('Case: %s is not found for the view', state);
             end
             
-            function loadNewData()
+            function loadNewData(datafiles)
                 
-                [files, path] = uigetfile('*.ref', 'Select the data files.', 'MultiSelect', 'on');
-                if ~isnumeric(files)
-                    if isa(files, 'char')
-                        files = {files};
-                    end
-                    
+                if nargin == 1
+                    files = datafiles;
                     newdata = cell(1, length(files));
                     
                     for i = 1 : length(files)
-                        newdata{i} = XeRefData(fullfile(path, files{i}));
+                        newdata{i} = XeRefData(files{i});
                     end
                     
                     this.data = [this.data, newdata];
+                else
+                    [files, path] = uigetfile('*.ref', 'Select the data files.', 'MultiSelect', 'on');
+                    if ~isnumeric(files)
+                        if isa(files, 'char')
+                            files = {files};
+                        end
+                        
+                        newdata = cell(1, length(files));
+                        
+                        for i = 1 : length(files)
+                            newdata{i} = XeRefData(fullfile(path, files{i}));
+                        end
+                        
+                        this.data = [this.data, newdata];
+                    end
                 end
-                
             end
             
         end
@@ -217,7 +239,7 @@ classdef XeRef < handle
                         case 'load-data'
                             displayDataFiles();
                             plotSelectedData();
-                        case 'choose-data'
+                        case {'choose-data', 'toggle-fresnel'}
                             plotSelectedData();
                     end
                 otherwise
@@ -240,13 +262,31 @@ classdef XeRef < handle
                 
                 selected = this.gui.dataFiles.Value;
                 
-                for i = selected
-                    errorbar(this.gui.ax1, this.data{i}.rawdata.q, this.data{i}.rawdata.ref, this.data{i}.rawdata.err, 'ob', 'linewidth', 2);
-                    hold(this.gui.ax1, 'on');
+                switch this.gui.normalized.Value
+                    case 0
+                        for i = selected
+                            q = this.data{i}.layers.getQ();
+                            ydata = this.data{i}.layers.data.ref;
+                            err = this.data{i}.layers.data.err;
+                            errorbar(this.gui.ax1, q, ydata, err, 'ob', 'linewidth', 2);
+                            hold(this.gui.ax1, 'on');
+                        end
+                        hold(this.gui.ax1, 'off');
+                        xlabel(this.gui.ax1, '$$ Q_z(\AA^{-1}) $$', 'interpreter', 'latex', 'fontsize', 14);
+                        ylabel(this.gui.ax1, 'Reflectivity', 'fontsize', 14);
+                    case 1
+                        for i = selected
+                            q = this.data{i}.layers.getQ();
+                            d = this.data{i}.layers.getFresnelNormalizedData();
+                            ydata = d.ref;
+                            err = d.err;
+                            errorbar(this.gui.ax1, q, ydata, err, 'ob', 'linewidth', 2);
+                            hold(this.gui.ax1, 'on');
+                        end
+                        hold(this.gui.ax1, 'off');
+                        xlabel(this.gui.ax1, '$$ Q_z(\AA^{-1}) $$', 'interpreter', 'latex', 'fontsize', 14);
+                        ylabel(this.gui.ax1, 'Fresnel Normalized Reflectivity', 'fontsize', 14);
                 end
-                hold(this.gui.ax1, 'off');
-                xlabel(this.gui.ax1, 'Qz');
-                ylabel(this.gui.ax1, 'Fresnel Normalized');
                 
             end
             
