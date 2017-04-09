@@ -2,12 +2,11 @@ classdef XeRefData < handle
     
     properties
         
-        rawdata
+        data
         layers
         
         qoff = 0
         qcut = 0.026
-        data
         
     end
     
@@ -15,8 +14,8 @@ classdef XeRefData < handle
         
         function this = XeRefData(file)
             
-            this.rawdata = RefRawData(file);
-            this.layers = RefLayers(this.rawdata);
+            this.data = RefData(file);
+            this.layers = RefLayers(this.data);
             
         end
         
