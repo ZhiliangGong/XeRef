@@ -2,10 +2,11 @@ classdef RefLayers < handle
     
     properties
         
-        ed = [0, 0.335]
-        thickness = [Inf, Inf]
+        ed = [0.335; 0.44; 0.26; 0]
+        thickness = [Inf; 8; 12; Inf]
         
         qoff = 0
+        sigma = 3.3
         data
         energy
         
@@ -27,6 +28,8 @@ classdef RefLayers < handle
             this.qoff = lsqnonlin(qOffFitFunction, 0);
             
         end
+        
+        % calculation based on layers model
         
         function ref = getRefWithQoff(this, qoff)
             
@@ -52,7 +55,7 @@ classdef RefLayers < handle
                 
                 qjp1 = sqrt(q.^2 - ones(size(q)) * normEd(j-1) * qc^2);
                 reff = (qjp1 - qj)./(qjp1 + qj);
-                phase = exp(1i * qj * ddlay(j));
+                phase = exp(1i * qj * this.thickness(j));
                 n1 = r .* phase;
                 r = (reff + n1)./(1 + reff .* n1);
                 
@@ -77,6 +80,8 @@ classdef RefLayers < handle
             fnr = this.getRef(q) ./ this.getFresnel(q);
             
         end
+        
+        % calculation based on data
         
         function d = getFresnelNormalizedData(this)
             
@@ -129,6 +134,41 @@ classdef RefLayers < handle
         function q = q(this)
             
             q = this.data.q + this.qoff;
+            
+        end
+        
+        function profile = getSmoothEdProfile(this, sigma)
+            
+            if nargin == 2
+                this.sigma = sigma;
+            end
+            
+            binSize = 0.25;
+            transSigma = 7;
+            transThickness = sum(this.thickness(2 : end - 1)) + 2 * transSigma * this.sigma;
+            binNumber = ceil(transThickness / binSize);
+            
+            thick = [0; this.thickness(2:end-1); 0];
+            
+            layerCenterPos = cumsum(thick) - thick / 2;
+            binPos = cumsum(ones(binNumber, 1) * binSize) - (transSigma * this.sigma) - binSize / 2;
+            
+            m = length(binPos);
+            n = length(layerCenterPos);
+            
+            binPos_mat = repmat(binPos, 1, n - 2);
+            layerCenterPos_mat = repmat(layerCenterPos(2:end-1)', m, 1);
+            thick_mat = repmat(thick(2:end-1)', m, 1);
+            ed_mat = repmat(this.ed(2:end-1)', m, 1);
+            contributions = zeros(m, n);
+            contributions(:, 2: end-1) = (erf((binPos_mat - layerCenterPos_mat + thick_mat / 2) / sqrt(2) / this.sigma) ...
+                + erf((- binPos_mat + layerCenterPos_mat + thick_mat / 2) / sqrt(2) / this.sigma)) / 2 .* ed_mat ;
+            contributions(:, 1) = this.ed(1) * (erf(-binPos / sqrt(2) / this.sigma) + 1) / 2;
+            
+            binEd = sum(contributions, 2);
+            profile.ed = binEd;
+            profile.thickness = binPos;
+            figure; plot(binPos, binEd, 'o');
             
         end
         

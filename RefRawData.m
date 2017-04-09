@@ -21,7 +21,7 @@ classdef RefRawData < handle
             this.ref = rawdata(:, 2);
             this.err = rawdata(:, 3);
             [pathname, filename, extension] = fileparts(file);
-            this.file = [filename, '.', extension];
+            this.file = [filename, extension];
             this.path = pathname;
             
         end
