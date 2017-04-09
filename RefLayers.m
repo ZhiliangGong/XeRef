@@ -2,8 +2,8 @@ classdef RefLayers < handle
     
     properties
         
-        ed = [0.335; 0.44; 0.26; 0]
-        thickness = [Inf; 8; 12; Inf]
+        ed = [0.335, 0.44, 0.26, 0]
+        thickness = [Inf, 8, 12, Inf]
         
         qoff = 0
         sigma = 3.3
@@ -150,7 +150,7 @@ classdef RefLayers < handle
             transThickness = sum(this.thickness(2 : end - 1)) + 2 * transSigma * this.sigma;
             binNumber = ceil(transThickness / binSize);
             
-            thick = [0; this.thickness(2:end-1); 0];
+            thick = [0, this.thickness(2:end-1), 0];
             
             layerCenterPos = cumsum(thick) - thick / 2;
             binPos = cumsum(ones(binNumber, 1) * binSize) - (transSigma * this.sigma) - binSize / 2;
@@ -161,9 +161,9 @@ classdef RefLayers < handle
             
             if n > 2
                 binPos_mat = repmat(binPos, 1, n - 2);
-                layerCenterPos_mat = repmat(layerCenterPos(2:end-1)', m, 1);
-                thick_mat = repmat(thick(2:end-1)', m, 1);
-                ed_mat = repmat(this.ed(2:end-1)', m, 1);
+                layerCenterPos_mat = repmat(layerCenterPos(2:end-1), m, 1);
+                thick_mat = repmat(thick(2:end-1), m, 1);
+                ed_mat = repmat(this.ed(2:end-1), m, 1);
                 contributions(:, 2: end-1) = (erf((binPos_mat - layerCenterPos_mat + thick_mat / 2) / sqrt(2) / this.sigma) ...
                     + erf((- binPos_mat + layerCenterPos_mat + thick_mat / 2) / sqrt(2) / this.sigma)) / 2 .* ed_mat ;
             end
@@ -174,6 +174,54 @@ classdef RefLayers < handle
             profile.ed = binEd;
             profile.z = binPos;
             profile.thickness = ones(m, 1) * 0.25;
+            
+        end
+        
+    end
+    
+    methods(Static)
+        
+        function profile = generateSmoothProfile(ed, thickness, sigma)
+            
+            if nargin == 2
+                sigma = 3.3;
+            end
+            
+            binSize = 0.25;
+            transSigma = 7;
+            transThickness = sum(thickness(2 : end - 1)) + 2 * transSigma * sigma;
+            binNumber = ceil(transThickness / binSize);
+            
+            thick = [0, thickness(2:end-1), 0];
+            
+            layerCenterPos = cumsum(thick) - thick / 2;
+            binPos = cumsum(ones(binNumber, 1) * binSize) - (transSigma * sigma) - binSize / 2;
+            
+            m = length(binPos);
+            n = length(layerCenterPos);
+            contributions = zeros(m, n);
+            
+            if n > 2
+                binPos_mat = repmat(binPos, 1, n - 2);
+                layerCenterPos_mat = repmat(layerCenterPos(2:end-1), m, 1);
+                thick_mat = repmat(thick(2:end-1), m, 1);
+                ed_mat = repmat(ed(2:end-1), m, 1);
+                contributions(:, 2: end-1) = (erf((binPos_mat - layerCenterPos_mat + thick_mat / 2) / sqrt(2) / sigma) ...
+                    + erf((- binPos_mat + layerCenterPos_mat + thick_mat / 2) / sqrt(2) / sigma)) / 2 .* ed_mat ;
+            end
+            
+            contributions(:, 1) = ed(1) * (erf(-binPos / sqrt(2) / sigma) + 1) / 2;
+            
+            breakPoints = [-Inf, 0, cumsum(thickness(2:end))];
+            
+            indices = binPos < repmat(breakPoints(2:end), m, 1) & binPos > repmat(breakPoints(1:end-1), m, 1);
+            
+            binEd = sum(contributions, 2);
+            profile.ed = binEd';
+            profile.z = binPos';
+            profile.thickness = ones(1, m) * binSize;
+            ed_mat = repmat(ed, m);
+            profile.layerEd = ed_mat(indices)';
             
         end
         

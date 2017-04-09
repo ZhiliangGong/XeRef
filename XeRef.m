@@ -3,6 +3,7 @@ classdef XeRef < handle
     properties
         
         data
+        profile
         gui
         handles
         
@@ -14,6 +15,10 @@ classdef XeRef < handle
             
             createView();
             createController();
+            this.control('initialize');
+            if nargin == 1
+                this.control('load-data', files);
+            end
             
             function createView()
                 
@@ -105,12 +110,8 @@ classdef XeRef < handle
                     this.gui.showCal = uicontrol(this.handles,'Style','checkbox','String','Show Calc.','Units','normalized',...
                         'Position',[0.6 0.915 0.1 0.018]);
                     
-                    this.gui.likelihoodChi2 = uicontrol(this.handles,'Style','popupmenu','String',{'Likelihood','Chi^2'},'Visible','off',...
-                        'Units','normalized',...
-                        'Position',[0.572 0.97 0.1 0.018]);
-                    
-                    this.gui.showFit = uicontrol(this.handles,'Style','checkbox','String','Show Fit','Units','normalized',...
-                        'Position',[0.54 0.437 0.06 0.018]);
+                    this.gui.showFit = uicontrol(this.handles,'Style','checkbox','String','Ed Profile','Units','normalized',...
+                        'Position',[0.6 0.41 0.1 0.018], 'Value', 1);
                     
                 end
             
@@ -174,10 +175,6 @@ classdef XeRef < handle
                 
             end
             
-            if nargin == 1
-                this.control('load-data', files);
-            end
-            
         end
         
         function control(this, trigger, varargin)
@@ -187,6 +184,10 @@ classdef XeRef < handle
             switch state
                 case 'empty'
                     switch trigger
+                        case 'initialize'
+                            layerTableData = readLayerTable();
+                            this.model(state, trigger, layerTableData);
+                            this.view(state, trigger);
                         case 'load-data'
                             this.model(state, trigger, varargin{1});
                             this.view(state, trigger);
@@ -217,7 +218,13 @@ classdef XeRef < handle
                 
             end
             
-            
+            function t = readLayerTable()
+                
+                dat = this.gui.layerTable.Data;
+                t.ed = fliplr(cell2mat(dat(:, 1))');
+                t.thickness = fliplr(cell2mat(dat(:, 2))');
+                
+            end
             
         end
         
@@ -226,6 +233,9 @@ classdef XeRef < handle
             switch state
                 case 'empty'
                     switch trigger
+                        case 'initialize'
+                            layerTableData = varargin{1}
+                            this.profile = RefLayers.generateSmoothProfile(layerTableData.ed, layerTableData.thickness);
                         case 'load-data'
                             if nargin == 4
                                 datafiles = varargin{1};
@@ -279,6 +289,8 @@ classdef XeRef < handle
             switch state
                 case 'empty'
                     switch trigger
+                        case 'initialize'
+                            plotEdProfile(this.gui.ax2);
                         case 'load-data'
                             displayDataFiles();
                             plotSelectedData(this.gui.ax1);
@@ -309,6 +321,8 @@ classdef XeRef < handle
                 
             end
             
+            % plotting
+            
             function plotSelectedData(ax)
                 
                 selected = this.gui.dataFiles.Value;
@@ -321,12 +335,12 @@ classdef XeRef < handle
                             q = this.data{i}.layers.getQ();
                             ydata = this.data{i}.layers.data.ref;
                             err = this.data{i}.layers.data.err;
-                            errorbar(ax, q, ydata, err, 'o', 'linewidth', 2, 'color', this.colors(j));
+                            errorbar(ax, q, ydata, err, 'o', 'linewidth', 1.5, 'color', this.colors(j));
                             legends{j} = this.data{i}.rawdata.file;
                             j = j + 1;
                             hold(ax, 'on');
                         end
-                        ylabel(ax, 'Reflectivity', 'fontsize', 14);
+                        ylabel(ax, 'Reflectivity', 'fontsize', 14, 'interpreter', 'latex');
                     case 1
                         j = 1;
                         for i = selected
@@ -334,12 +348,12 @@ classdef XeRef < handle
                             d = this.data{i}.layers.getFresnelNormalizedData();
                             ydata = d.ref;
                             err = d.err;
-                            errorbar(ax, q, ydata, err, 'o', 'linewidth', 2, 'color', this.colors(j));
+                            errorbar(ax, q, ydata, err, 'o', 'linewidth', 1.5, 'color', this.colors(j));
                             legends{j} = this.data{i}.rawdata.file;
                             j = j + 1;
                             hold(ax, 'on');
                         end
-                        ylabel(ax, 'Fresnel Normalized Reflectivity', 'fontsize', 14);
+                        ylabel(ax, 'Fresnel Normalized Reflectivity', 'fontsize', 14, 'interpreter', 'latex');
                 end
                 
                 if this.gui.showCal.Value
@@ -360,10 +374,19 @@ classdef XeRef < handle
                             end
                     end
                 end
-                
                 xlabel(ax, '$$ Q_z(\AA^{-1}) $$', 'interpreter', 'latex', 'fontsize', 14);
                 legend(ax, legends, 'interpreter', 'none');
                 hold(ax, 'off');
+                
+            end
+            
+            function plotEdProfile(ax)
+                
+                plot(ax, this.profile.z, this.profile.ed, 'o', 'linewidth', 1.5);
+                hold(ax, 'on');
+                plot(ax, this.profile.z, this.profile.layerEd, '-', 'linewidth', 2);
+                xlabel('$$ z (\AA) $$', 'interpreter', 'latex', 'fontsize', 14);
+                ylabel('$$ Electron Density (\AA^{-3}) $$', 'interpreter', 'latex', 'fontsize', 14);
                 
             end
             
