@@ -43,23 +43,25 @@ classdef RefLayers < handle
                 q = this.getQ();
             end
             
+            profile = this.getSmoothEdProfile();
+            
             qc = this.getQc();
-            normEd = this.ed / this.ed(end);
+            normEd = profile.ed / profile.ed(1);
             
-            r = (sqrt(q.^2 - ones(size(q)) * normEd(end-1) * qc^2) - sqrt(q.^2 - ones(size(q)) * normEd(end) * qc^2)) ./...
-                (sqrt(q.^2 - ones(size(q)) * normEd(end-1) * qc^2) + sqrt(q.^2 - ones(size(q)) * normEd(end) * qc^2));
+            r = (sqrt(q.^2 - ones(size(q)) * normEd(2) * qc^2) - sqrt(q.^2 - ones(size(q)) * normEd(1) * qc^2)) ./...
+                (sqrt(q.^2 - ones(size(q)) * normEd(2) * qc^2) + sqrt(q.^2 - ones(size(q)) * normEd(1) * qc^2));
             
-            qj = sqrt(q.^2 - ones(size(q)) * normEd(end-1) * qc^2);
+            qj = sqrt(q.^2 - ones(size(q)) * normEd(2) * qc^2);
             
-            for j = (length(normEd) - 1) : -1 : 2
+            for j = 2 : (length(normEd) - 1)
                 
                 qjp1 = sqrt(q.^2 - ones(size(q)) * normEd(j-1) * qc^2);
                 reff = (qjp1 - qj)./(qjp1 + qj);
-                phase = exp(1i * qj * this.thickness(j));
+                phase = exp(1i * qj * profile.thickness(j));
                 n1 = r .* phase;
                 r = (reff + n1)./(1 + reff .* n1);
                 
-                if abs(normEd(j - 1) - normEd(1)) < 1e-7
+                if abs(normEd(j + 1) - normEd(1)) < 1e-7
                     break;
                 end
                 
@@ -110,7 +112,7 @@ classdef RefLayers < handle
             
             ro = 2.818*10^-5; % radius of electron in angstrom
             k = 2 * pi / this.getWavelength();
-            delta = 2 * pi * ro * this.ed(end) / k^2;
+            delta = 2 * pi * ro * this.ed(1) / k^2;
             qc = 2 * k * sqrt( 2 * delta );
             
         end
@@ -155,20 +157,23 @@ classdef RefLayers < handle
             
             m = length(binPos);
             n = length(layerCenterPos);
-            
-            binPos_mat = repmat(binPos, 1, n - 2);
-            layerCenterPos_mat = repmat(layerCenterPos(2:end-1)', m, 1);
-            thick_mat = repmat(thick(2:end-1)', m, 1);
-            ed_mat = repmat(this.ed(2:end-1)', m, 1);
             contributions = zeros(m, n);
-            contributions(:, 2: end-1) = (erf((binPos_mat - layerCenterPos_mat + thick_mat / 2) / sqrt(2) / this.sigma) ...
-                + erf((- binPos_mat + layerCenterPos_mat + thick_mat / 2) / sqrt(2) / this.sigma)) / 2 .* ed_mat ;
+            
+            if n > 2
+                binPos_mat = repmat(binPos, 1, n - 2);
+                layerCenterPos_mat = repmat(layerCenterPos(2:end-1)', m, 1);
+                thick_mat = repmat(thick(2:end-1)', m, 1);
+                ed_mat = repmat(this.ed(2:end-1)', m, 1);
+                contributions(:, 2: end-1) = (erf((binPos_mat - layerCenterPos_mat + thick_mat / 2) / sqrt(2) / this.sigma) ...
+                    + erf((- binPos_mat + layerCenterPos_mat + thick_mat / 2) / sqrt(2) / this.sigma)) / 2 .* ed_mat ;
+            end
+            
             contributions(:, 1) = this.ed(1) * (erf(-binPos / sqrt(2) / this.sigma) + 1) / 2;
             
             binEd = sum(contributions, 2);
             profile.ed = binEd;
-            profile.thickness = binPos;
-            figure; plot(binPos, binEd, 'o');
+            profile.z = binPos;
+            profile.thickness = ones(m, 1) * 0.25;
             
         end
         
