@@ -4,6 +4,10 @@ classdef XeRef < handle
         
         data
         layers
+        
+        protein
+        pdbFiles
+        
         gui
         handles
         
@@ -34,6 +38,8 @@ classdef XeRef < handle
                 createFittingControls();
                 createOutputandSaveButtons();
                 
+                createProteinParameterTable();
+                
                 function initializeView()
                     
                     screenSize = [335, 300, 1250, 800];
@@ -44,7 +50,8 @@ classdef XeRef < handle
                         screenSize(4) = pix(4)*0.85;
                     end
                     
-                    this.handles = figure('Visible','off','Name','XeRay','NumberTitle','off','Units','pixels', 'Position', screenSize, 'Resize', 'on');
+                    this.handles = figure('Visible', 'off', 'Name', 'XeRef', 'NumberTitle', 'off', 'Units', 'pixels',...
+                        'Position', screenSize, 'Resize', 'on');
                     movegui(this.handles, 'center');
                     this.handles.Visible = 'on';
                     
@@ -73,8 +80,8 @@ classdef XeRef < handle
                     this.gui.pdbFiles = uicontrol(panel,'Style','listbox','Units','normalized',...
                         'Position',[0.05 0.051 0.9 0.44],'Max',2);
                     
-                    this.gui.loadPdb = uicontrol(panel,'Style','pushbutton','String','Load','Units','normalized',...
-                        'Position',[0.035 0.015 0.3 0.032]);
+                    this.gui.loadPdb = uicontrol(panel,'Style','pushbutton','String','Load PDB','Units','normalized',...
+                        'Position',[0.035 0.015 0.35 0.032]);
                     
                     this.gui.deletePdb = uicontrol(panel,'Style','pushbutton','String','Delete','Units','normalized',...
                         'Position',[0.38 0.015 0.3 0.032]);
@@ -120,6 +127,9 @@ classdef XeRef < handle
                     this.gui.showEd = uicontrol(this.handles,'Style','checkbox','String','Ed Profile','Units','normalized',...
                         'Position',[0.6 0.41 0.1 0.018], 'Value', 1);
                     
+                    this.gui.showProtein = uicontrol(this.handles,'Style','checkbox','String','Protein','Units','normalized',...
+                        'Position',[0.6 0.385 0.1 0.018], 'Value', 0);
+                    
                 end
             
                 function createRightPanel()
@@ -153,25 +163,48 @@ classdef XeRef < handle
                     colName = {'Min','Max','Start','Fix','Plot'};
                     colFormat = {'numeric','numeric','numeric','logical','logical'};
                     colWidth = {55 55 55 30 30};
-                    tableData = {-0.01, 0.01, 0, false, false; 0, 0, 0, true, false; 0.2, 0.3, 0.26, false, false;...
-                        0.4, 0.5, 0.44, false, false; 0.335, 0.335, 0.335, true, false; 8, 16, 12, false, false;...
-                        6, 14, 10, false, false};
+%                     tableData = {-0.01, 0.01, 0, false, false; 0, 0, 0, true, false; 0.2, 0.3, 0.26, false, false;...
+%                         0.4, 0.5, 0.44, false, false; 0.335, 0.335, 0.335, true, false; 8, 16, 12, false, false;...
+%                         6, 14, 10, false, false};
+                    tableData = {-5e-4, -4e-4, -6e-4, false, false; 0, 0, 0, true, false; 0.236, 0.242, 0.24, false, false;...
+                        0.458, 0.464, 0.46, false, false; 0.335, 0.335, 0.335, true, false; 13.2, 13.35, 13.3, false, false;...
+                        9.2, 9.6, 9.4, false, false};
                     
                     this.gui.parametersTableTitle = uicontrol(rightPanel,'Style','text','String','Fitting Parameters:',...
                         'Units','normalized','HorizontalAlignment','left', 'Position', [0.025 0.89 0.3 0.025]);
                     
                     this.gui.parametersTable = uitable(rightPanel,'Data', tableData,'ColumnName', colName,...
                         'ColumnFormat', colFormat,'ColumnEditable', [true true true true true],'Units','normalized',...
-                        'ColumnWidth',colWidth,'RowName',rowName,'RowStriping','off', 'Position', [0.025 0.59 0.935 0.3]);
+                        'ColumnWidth',colWidth,'RowName',rowName,'RowStriping','off', 'Position', [0.025 0.69 0.935 0.2]);
                     
                     this.gui.addLayer = uicontrol(rightPanel,'Style','pushbutton','String', 'Add', 'Units','normalized',...
-                        'Position', [0.725 0.555 0.11 0.03]);
+                        'Position', [0.725 0.655 0.11 0.03]);
                     
                     this.gui.deleteLayer = uicontrol(rightPanel,'Style','pushbutton','String', 'Delete',...
-                        'Units','normalized', 'Position', [0.84 0.555 0.12 0.03]);
+                        'Units','normalized', 'Position', [0.84 0.655 0.12 0.03]);
                     
-                    this.gui.quickFit = uicontrol(rightPanel,'Style','pushbutton','String', 'Quick Fit',...
-                        'Units','normalized', 'Position', [0.81 0.52 0.15 0.03]);
+                end
+                
+                function createProteinParameterTable()
+                    
+                    rightPanel = this.gui.rightPanel;
+                    
+                    this.gui.toggleProtein = uicontrol(rightPanel,'Style','radiobutton','String','Add Protein Layer',...
+                        'Units','normalized', 'Position',[0.015 0.655 0.4 0.03]);
+                    
+                    this.gui.proteinOrientationText = uicontrol(rightPanel,'Style','text','String','Protein parameters:',...
+                        'Units','normalized','HorizontalAlignment','left', 'Position',[0.025 0.625 0.3 0.03]);
+                    
+                    rowName = {'Theta', 'Phi', 'Insertion', 'Coverage'};
+                    colName = {'Min','Max','Start','Fix','Plot'};
+                    colFormat = {'numeric','numeric','numeric','logical','logical'};
+                    colWidth = {55 55 55 30 30};
+                    tableData = {0, 180, 0, false, false; 0, 350, 0, false, false; 0, 10, 0, false, false;...
+                        0, 1, 0, false, false};
+                    
+                    this.gui.proteinParaTable = uitable(rightPanel,'Data', tableData,'ColumnName', colName,...
+                        'ColumnFormat', colFormat,'ColumnEditable', [true true true true true],'Units','normalized',...
+                        'ColumnWidth',colWidth,'RowName',rowName,'RowStriping','off', 'Position', [0.025 0.43 0.935 0.2]);
                     
                 end
                 
@@ -179,7 +212,10 @@ classdef XeRef < handle
                     
                     rightPanel = this.gui.rightPanel;
                     
-                    h = 0.52;
+                    h = 0.42;
+                    
+                    this.gui.quickFit = uicontrol(rightPanel,'Style','pushbutton','String', 'Quick Fit',...
+                        'Units','normalized', 'Position', [0.65 h-0.03 0.15 0.03]);
                     
                     this.gui.loadPara = uicontrol(rightPanel,'Style','pushbutton','String','Load Para','Units','normalized',...
                         'Position',[0.024 h-0.03 0.17 0.03]);
@@ -188,10 +224,10 @@ classdef XeRef < handle
                         'Position',[0.19 h-0.03 0.17 0.03]);
                     
                     this.gui.stepInput = uicontrol(rightPanel,'Style','edit','String', 10, 'Units','normalized',...
-                        'HorizontalAlignment','left','Position',[0.62 h-0.03 0.1 0.03]);
+                        'HorizontalAlignment','left','Position',[0.4 h-0.03 0.1 0.03]);
                     
                     this.gui.stepText = uicontrol(rightPanel,'Style','text','String','Steps','Units','normalized',...
-                        'HorizontalAlignment','left','Position', [0.735 h-0.035 0.08 0.03]);
+                        'HorizontalAlignment','left','Position', [0.515 h-0.035 0.08 0.03]);
                     
                     this.gui.fitButton = uicontrol(rightPanel,'Style','pushbutton','String','Fit','Units','normalized',...
                         'Position',[0.82 h-0.03 0.15 0.03]);
@@ -218,7 +254,7 @@ classdef XeRef < handle
                     rightPanel = this.gui.rightPanel;
                     
                     this.gui.output = uicontrol(rightPanel,'Style','edit','Max',2,'HorizontalAlignment','left','Units','normalized',...
-                        'Position',[0.03 0.07 0.935 0.2]);
+                        'Position',[0.03 0.07 0.935 0.28]);
                     
                     this.gui.clearOutput = uicontrol(rightPanel,'Style','pushbutton','String','Clear','Units','normalized',...
                         'Position',[0.82 0.038 0.15 0.03]);
@@ -244,18 +280,25 @@ classdef XeRef < handle
             
             function createController()
                 
+                % files
                 this.gui.loadData.Callback = @(varargin) this.control('load-data');
                 this.gui.dataFiles.Callback = @(varargin) this.control('choose-data');
+                this.gui.loadPdb.Callback = @(varargin) this.control('load-pdb');
+                this.gui.pdbFiles.Callback = @(varargin) this.control('choose-pdb');
                 
                 % figure controls
                 this.gui.normalized.Callback = @(varargin) this.control('toggle-fresnel');
                 this.gui.showCal.Callback = @(varargin) this.control('toggle-cal');
                 this.gui.showFit.Callback = @(varargin) this.control('toggle-fit');
+                this.gui.showProtein.Callback = @(varargin) this.control('show-protein');
+                this.gui.showEd.Callback = @(varargin) this.control('show-ed');
                 
                 % table controls
+                this.gui.toggleProtein.Callback = @(varargin) this.control('toggle-protein');
                 this.gui.addLayer.Callback = @(varargin) this.control('add-layer');
                 this.gui.deleteLayer.Callback = @(varargin) this.control('delete-layers');
                 this.gui.parametersTable.CellEditCallback = @(source, eventdata, varargin) this.control('parameter-table', eventdata);
+                this.gui.proteinParaTable.CellEditCallback = @(source, eventdata, varargin) this.control('protein-table', eventdata);
                 
                 % fitting
                 this.gui.fitButton.Callback = @(varargin) this.control('fit');
@@ -288,7 +331,17 @@ classdef XeRef < handle
                         case 'load-data'
                             this.model(state, trigger);
                             this.view(state, trigger);
+                        case 'load-pdb'
+                            this.model(state, trigger);
+                            this.view(state, trigger);
+                        case 'choose-pdb'
+                            this.model(state, trigger);
+                            this.view(state, trigger);
                         case {'choose-data', 'toggle-fresnel', 'toggle-cal'}
+                            this.view(state, trigger);
+                        case 'show-protein'
+                            this.view(state, trigger);
+                        case 'show-ed'
                             this.view(state, trigger);
                         case 'parameter-table'
                             eventdata = varargin{1};
@@ -322,6 +375,17 @@ classdef XeRef < handle
                             pData = readParameterTable();
                             this.model(state, trigger, pData);
                             this.view(state, 'update-starts-follow-up');
+                        case 'protein-table'
+                            eventdata = varargin{1};
+                            viewUpdate = proteinParaEditEntailsUpdate(eventdata);
+                            if viewUpdate
+                                tdata = readProteinParaTable();
+                                this.view(state, trigger, tdata);
+                            end
+                        case 'toggle-protein'
+                            tdata = readProteinParaTable();
+                            this.model(state, trigger, tdata);
+                            this.view(state, trigger);
                         otherwise
                             sprintf('State: %s, trigger: %s is not found for the controller', state, trigger)
                     end
@@ -390,12 +454,39 @@ classdef XeRef < handle
                         table.data{ind1, 2} = table.Data{ind1, 3};
                     case 5
                         if isfield(this.layers.fits, 'one') && this.layers.fits.all.fitted(ind1)
+                            sel = cell2mat(table.Data(:, end));
+                            num = sum(sel);
+                            if num >= 3
+                                indices = find(sel);
+                                indices = indices(indices ~= ind1);
+                                table.Data{indices(1), ind2} = false;
+                            end
                             viewUpdate = true;
                         else
                             table.Data{ind1, ind2} = false;
                         end
                 end
                 
+            end
+            
+            function viewUpdate = proteinParaEditEntailsUpdate(eventdata)
+                viewUpdate = false;
+                ind1 = eventdata.Indices(1);
+                ind2 = eventdata.Indices(2);
+                table = this.gui.proteinParaTable;
+                switch ind2
+                    case 1
+                    case 2
+                    case 3
+                        if table.Data{ind1, ind2} > table.Data{ind1, 2}
+                            table.Data{ind1, 2} = table.Data{ind1, ind2};
+                        elseif table.Data{ind1, ind2} < table.Data{ind1, 1}
+                            table.Data{ind1, 1} = table.Data{ind1, ind2};
+                        end
+                        viewUpdate = true;
+                    case 4
+                    case 5
+                end
             end
             
             function t = readParameterTable()
@@ -412,6 +503,20 @@ classdef XeRef < handle
                 
                 t.ed = t.p0(n_layer + 1 : -1 : 2);
                 t.thickness = [Inf, t.p0(end : -1 : end - n_layer + 3), Inf];
+                
+            end
+            
+            function t = readProteinParaTable()
+                
+                dat = this.gui.proteinParaTable.Data;
+                
+                mat = cell2mat(dat(:, 1:3));
+                
+                t.p0 = mat(:, 3)';
+                t.lb = mat(:, 1)';
+                t.ub = mat(:, 2)';
+                t.theta = mat(1, 3);
+                t.phi = mat(2, 3);
                 
             end
             
@@ -437,6 +542,8 @@ classdef XeRef < handle
                     switch trigger
                         case 'load-data'
                             loadNewData();
+                        case 'load-pdb'
+                            loadNewPdb();
                         case 'layer-table'
                             dat = varargin{1};
                             this.layers = RefLayers(10, dat.ed, dat.thickness);
@@ -447,7 +554,7 @@ classdef XeRef < handle
                             refData = varargin{1};
                             pData = varargin{2};
                             steps = varargin{3};
-                            this.layers.fitData(refData, pData.p0, pData.lb, pData.ub, steps);
+                            this.layers.fitDataThorough(refData, pData.p0, pData.lb, pData.ub, steps);
                         case 'quick-fit'
                             refData = varargin{1};
                             pData = varargin{2};
@@ -456,6 +563,15 @@ classdef XeRef < handle
                         case 'update-starts'
                             pData = varargin{1};
                             this.layers.updateModel(pData.ed, pData.thickness);
+                        case 'choose-pdb'
+                            this.protein = RefProtein(this.pdbFiles{this.gui.pdbFiles.Value(1)});
+                        case 'toggle-protein'
+                            if this.gui.toggleProtein.Value
+                                tdata = varargin{1};
+                                this.layers.protein = this.protein;
+                            else
+                                this.layers.protein = [];
+                            end
                     end
                 otherwise
                     sprintf('Case: %s is not found for the view', state);
@@ -488,6 +604,29 @@ classdef XeRef < handle
                         this.data = [this.data, newdata];
                     end
                 end
+                
+            end
+            
+            function loadNewPdb(files)
+                
+                if nargin == 0
+                    [files, path] = uigetfile('*.pdb', 'Select the pdb files.', 'MultiSelect', 'on');
+                    if ~isnumeric(files)
+                        if isa(files, 'char')
+                            files = {files};
+                        end
+                        for i = 1 : length(files)
+                            files{i} = fullfile(path, files{i});
+                        end
+                    end
+                end
+                
+                this.pdbFiles = [this.pdbFiles, files];
+                
+                if isempty(this.protein)
+                    this.protein = RefProtein(this.pdbFiles{this.gui.pdbFiles.Value(1)});
+                end
+                
             end
             
         end
@@ -510,6 +649,8 @@ classdef XeRef < handle
                         case 'load-data'
                             displayDataFiles();
                             upperPlot();
+                        case 'load-pdb'
+                            displayPdbFiles();
                         case {'choose-data', 'toggle-fresnel', 'toggle-cal', 'toggle-fit'}
                             upperPlot();
                         case 'layer-table'
@@ -518,6 +659,11 @@ classdef XeRef < handle
                         case 'fit'
                             this.gui.showFit.Value = 1;
                             upperPlot();
+                            recordFittingResults();
+                        case 'quick-fit'
+                            this.gui.showFit.Value = 1;
+                            upperPlot();
+                            recordFittingResults();
                         case 'update-starts'
                             newStarts = varargin{1};
                             this.gui.parametersTable.Data(:, 3) = num2cell(newStarts');
@@ -529,6 +675,21 @@ classdef XeRef < handle
                         case 'parameter-table'
                             upperPlot();
                             plotEdProfile(this.gui.ax2);
+                        case 'show-protein'
+                            if ~isempty(this.protein)
+                                this.gui.showEd.Value = ~ this.gui.showProtein.Value;
+                                lowerPlot();
+                            else
+                                this.gui.showProtein.Value = false;
+                            end
+                        case 'show-ed'
+                            this.gui.showProtein.Value = ~ this.gui.showEd.Value;
+                            lowerPlot();
+                        case 'protein-table'
+                            tdata = varargin{1};
+                            theta = tdata.theta;
+                            phi = tdata.phi;
+                            lowerPlot(theta, phi);
                     end
                 otherwise
                     disp('Case: %s is not found for the view', state);
@@ -548,6 +709,19 @@ classdef XeRef < handle
                 
             end
             
+            function displayPdbFiles()
+                
+                n = length(this.pdbFiles);
+                files = cell(1, n);
+                for i = 1 : n
+                    [~, name, extension] = fileparts(this.pdbFiles{i});
+                    files{i} = [name, extension];
+                end
+                
+                this.gui.pdbFiles.String = files;
+                
+            end
+            
             % plotting
             
             function upperPlot()
@@ -564,16 +738,54 @@ classdef XeRef < handle
                 
             end
             
+            function lowerPlot(varargin)
+                
+                ax = this.gui.ax2;
+                switch this.gui.showProtein.Value
+                    case 0
+                        plotEdProfile(ax);
+                    case 1
+                        if nargin == 2
+                            theta_local = varargin{1};
+                            phi_local = varargin{2};
+                            plotProtein(ax, theta_local, phi_local);
+                        else
+                            plotProtein(ax, 0, 0);
+                        end
+                end
+                
+            end
+            
             function plotLikelihoodOrChi2(ax)
                 
                 sel = cell2mat(this.gui.parametersTable.Data(:, end));
-                n = find(sel, 1);
-                ind = sum(this.layers.fits.all.fitted(1 : n));
                 
-                dat = this.layers.fits.one{ind};
-                plot(ax, dat.para_range, dat.likelihood, '-o', 'markersize', 8, 'linewidth', 2);
-                xlabel(ax, dat.para_name, 'fontsize', 14, 'interpreter', 'latex');
-                ylabel(ax, 'Likelihood', 'fontsize', 14, 'interpreter', 'latex');
+                switch sum(sel)
+                    case 1
+                        loc = find(sel);
+                        ind = sum(this.layers.fits.all.fitted(1 : loc));
+                        dat = this.layers.fits.one{ind};
+                        plot(ax, dat.para_range, dat.likelihood, 'o', 'markersize', 8, 'linewidth', 2);
+                        hold(ax, 'on');
+                        plot(ax, dat.gauss.x, dat.gauss.y, '-', 'linewidth', 2);
+                        hold(ax, 'off');
+                        legend(ax, {'Likelihood', 'Gassian Fit'});
+                        xlabel(ax, dat.para_name, 'fontsize', 14, 'interpreter', 'latex');
+                        ylabel(ax, 'Likelihood', 'fontsize', 14, 'interpreter', 'latex');
+                    case 2
+                        loc = find(sel);
+                        ind1 = sum(this.layers.fits.all.fitted(1 : loc(1)));
+                        ind2 = sum(this.layers.fits.all.fitted(1 : loc(2)));
+                        dat = this.layers.fits.two{ind1, ind2};
+                        contourf(ax, dat.para_range_1, dat.para_range_2, dat.likelihood);
+                        colorbar(ax);
+                        hold(ax, 'on');
+                        plot(ax, dat.confidence.contour(1, :), dat.confidence.contour(2, :), 'r-', 'linewidth', 2);
+                        hold(ax, 'off');
+                        xlabel(ax, dat.para_names{1}, 'fontsize', 14, 'interpreter', 'latex');
+                        ylabel(ax, dat.para_names{2}, 'fontsize', 14, 'interpreter', 'latex');
+                        legend(ax, 'Joint Likilihood', '95% confidence window');
+                end
                 
             end
             
@@ -650,6 +862,50 @@ classdef XeRef < handle
                 
             end
             
+            function plotProtein(ax, theta, phi)
+                
+                if ~isempty(this.protein)
+                    if nargin == 1
+                        theta = 0;
+                        phi = 0;
+                    end
+                    this.protein.visualize(ax, theta, phi);
+                end
+                
+            end
+            
+            function recordFittingResults()
+                
+                text = {};
+                if isfield(this.layers.fits, 'all')
+                    dat = this.layers.fits.all;
+                    n = length(dat.para_fitted);
+                    text_1 = cell(n+4, 1);
+                    text_1{1} = this.textDivider();
+                    text_1{2} = 'Global fit result: ';
+                    text_1{3} = '';
+                    text_1{4} = ['Chi^2: ', num2str(dat.chi2)];
+                    for i = 1 : n
+                        text_1{i+4} = [dat.para_names_fitted{i}, ': ', num2str(dat.para_fitted(i))];
+                    end
+                    text = [text; text_1];
+                    if isfield(this.layers.fits, 'one')
+                        dat = this.layers.fits.one;
+                        text_2 = cell(n+3, 1);
+                        text_2{1} = '';
+                        text_2{2} = 'Single parameter brute force fit:';
+                        text_2{3} = '';
+                        for i = 1 : n
+                            text_2{i+3} = [dat{i}.para_name, ': ', num2str(dat{i}.gauss.para(2)), ', standard deviation: ', num2str(dat{i}.gauss.para(3))];
+                        end
+                        text = [text; text_2];
+                    end
+                end
+                
+                this.gui.output.String = [text; this.gui.output.String];
+                
+            end
+            
         end
         
     end
@@ -668,10 +924,9 @@ classdef XeRef < handle
             
         end
         
-        function ind = tableInd2ParaInd(n_layer)
+        function s = textDivider()
             
-            ind = (1 : n_layer * 2 - 1);
-            ind(2:end) = fliplr(ind(2:end));
+            s = repmat('-', 1, 76);
             
         end
         

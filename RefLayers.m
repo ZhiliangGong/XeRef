@@ -8,8 +8,10 @@ classdef RefLayers < handle
         fits
         
         profile
-        sigma = 3.3
+        sigma = 3.4
         energy
+        
+        protein
         
     end
     
@@ -35,6 +37,12 @@ classdef RefLayers < handle
             this.ed = ed;
             this.thickness = thickness;
             this.getSmoothEdProfile();
+            
+        end
+        
+        function addProtein(this, file)
+            
+            this.protein = ProteinEd(file);
             
         end
         
@@ -95,16 +103,21 @@ classdef RefLayers < handle
             sel = lb_all ~= ub_all;
             if sum(sel) > 0
                 this.fitAll(refData, para_all, lb_all, ub_all);
-                this.fitParaOneByOne(refData, para_all, lb_all, ub_all, n_steps);
+                this.fitParaOneByOne_parallel(refData, para_all, lb_all, ub_all, n_steps);
             end
             
         end
         
-        function fitData(this, refData, para_all, lb_all, ub_all, n_steps)
+        function fitDataThorough(this, refData, para_all, lb_all, ub_all, n_steps)
             
-            this.fitAll(refData, para_all, lb_all, ub_all);
-            this.fitParaOneByOne(refData, para_all, lb_all, ub_all, n_steps);
-            this.fitParaByPairs(refData, para_all, lb_all, ub_all, n_steps);
+            sel = lb_all ~= ub_all;
+            if sum(sel) > 0
+                this.fitAll(refData, para_all, lb_all, ub_all);
+                this.fitParaOneByOne_parallel(refData, para_all, lb_all, ub_all, n_steps);
+                if sum(sel) > 1
+                    this.fitParaByPairs_parallel(refData, para_all, lb_all, ub_all, n_steps);
+                end
+            end
             
         end
         
@@ -116,7 +129,7 @@ classdef RefLayers < handle
             lb_partial = lb_all(~sel);
             ub_partial = ub_all(~sel);
             
-            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'final');
+            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'none');
             
             % fit all varying parameters at once
             
@@ -140,10 +153,10 @@ classdef RefLayers < handle
             
         end
         
-        function fitParaOneByOne(this, refData, para_all, lb_all, ub_all, n_steps)
+        function fitParaOneByOne_single(this, refData, para_all, lb_all, ub_all, n_steps)
             
-            sel = lb_all == ub_all;
-            para_partial = para_all(~sel);
+            sel = lb_all ~= ub_all;
+            para_partial = para_all(sel);
             
             M = length(para_partial);
             this.fits.one = cell(1, M);
@@ -153,7 +166,7 @@ classdef RefLayers < handle
             tic;
             k = 1;
             for i = 1 : length(sel)
-                if ~sel(i)
+                if sel(i)
                     para_range = linspace(lb_all(i), ub_all(i), n_steps);
                     
                     result.para_range = para_range;
@@ -169,10 +182,10 @@ classdef RefLayers < handle
                         
                         fitOneFun = @(p) (this.getRefForPartialPara(refData.q, p, lb_all_fix_one, ub_all_fix_one) - refData.ref) ./ refData.err;
                         
-                        sel = lb_all_fix_one == ub_all_fix_one;
-                        lb_partial_fix_one = lb_all_fix_one(~sel);
-                        ub_partial_fix_one = ub_all_fix_one(~sel);
-                        para_partial_fix_one = para_all(~sel);
+                        newsel = lb_all_fix_one ~= ub_all_fix_one;
+                        lb_partial_fix_one = lb_all_fix_one(newsel);
+                        ub_partial_fix_one = ub_all_fix_one(newsel);
+                        para_partial_fix_one = para_all(newsel);
                         [~, chi2] = lsqnonlin(fitOneFun, para_partial_fix_one, lb_partial_fix_one, ub_partial_fix_one, options);
                         result.chi2(j) = chi2;
                         
@@ -190,7 +203,73 @@ classdef RefLayers < handle
             
         end
         
-        function fitParaByPairs(this, refData, para_all, lb_all, ub_all, n_steps)
+        function fitParaOneByOne_parallel(this, refData, para_all, lb_all, ub_all, n_steps)
+            
+            sel = lb_all ~= ub_all;
+            indices = find(sel);
+            para_partial = para_all(~sel);
+            
+            M = length(para_partial);
+            this.fits.one = cell(1, M);
+            
+            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'none');
+            
+            % prepare for parfor loop
+            q_par = refData.q;
+            ref_par = refData.ref;
+            err_par = refData.err;
+            sigma_par = this.sigma;
+            energy_par = this.energy;
+            
+            tic;
+            for i = 1 : length(indices)
+                ind = indices(i);
+                para_range = linspace(lb_all(ind), ub_all(ind), n_steps);
+                    
+                result.para_range = para_range;
+                chi2_array = zeros(1, n_steps);
+                result.para_name = this.fits.all.para_names_all{ind};
+                
+                parfor j = 1 : n_steps
+                    
+                    para_all_par = para_all;
+                    
+                    lb_all_fix_one = lb_all;
+                    lb_all_fix_one(ind) = para_range(j);
+                    ub_all_fix_one = ub_all;
+                    ub_all_fix_one(ind) = para_range(j);
+                    
+                    fitFun = @(p) (RefLayers.calculateRefPartialPara(q_par, p, lb_all_fix_one, ub_all_fix_one, sigma_par, energy_par) - ref_par) ./ err_par;
+                    
+                    newsel = lb_all_fix_one ~= ub_all_fix_one;
+                    lb_partial_fix_one = lb_all_fix_one(newsel);
+                    ub_partial_fix_one = ub_all_fix_one(newsel);
+                    para_partial_fix_one = para_all_par(newsel);
+                    
+                    [~, chi2] = lsqnonlin(fitFun, para_partial_fix_one, lb_partial_fix_one, ub_partial_fix_one, options);
+                    chi2_array(j) = chi2;
+                    
+                end
+                
+                result.chi2 = chi2_array;
+                lk = exp( - (result.chi2 - min(result.chi2)) / 2);
+                result.likelihood = lk / sum(lk);
+                
+                [gauss_para, flag] = fitGaussianLikelihood(result.para_range, result.likelihood);
+                if flag
+                    warning('%s %s', result.para_name, 'fitting bad.');
+                end
+                result.gauss.x = linspace(para_range(1), para_range(end), 100);
+                result.gauss.y = this.bellCurve(result.gauss.x, gauss_para);
+                result.gauss.para = gauss_para;
+                
+                this.fits.one{i} = result;
+            end
+            toc;
+            
+        end
+        
+        function fitParaByPairs_single(this, refData, para_all, lb_all, ub_all, n_steps)
             
             sel = lb_all ~= ub_all;
             M = sum(sel);
@@ -264,6 +343,82 @@ classdef RefLayers < handle
                 
                 this.fits.two = results;
                 
+            end
+            
+        end
+        
+        function fitParaByPairs_parallel(this, refData, para_all, lb_all, ub_all, n_steps)
+            
+            sel = lb_all ~= ub_all;
+            indices = find(sel);
+            num = length(indices);
+            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'none');
+            
+            switch num
+                case 0
+                    disp('Select at least 2 parameters to fit for pair fitting.');
+                case 1
+                    disp('Select at least 2 parameters to fit for pair fitting.');
+                case 2
+                    
+                otherwise
+                    results = cell(num, num);
+                    tic;
+                    for i = 1 : num - 1
+                        for j = i + 1 : num
+                            para_range_1 = linspace(lb_all(indices(i)), ub_all(indices(i)), n_steps);
+                            para_range_2 = linspace(lb_all(indices(j)), ub_all(indices(j)), n_steps);
+                            
+                            result.para_range_1 = para_range_1;
+                            result.para_range_2 = para_range_2;
+                            result.chi2 = zeros(n_steps, n_steps);
+                            result.para_names = this.fits.all.para_names_all([i, j]);
+                            
+                            % prepare for parfor loop
+                            q_par = refData.q;
+                            ref_par = refData.ref;
+                            err_par = refData.err;
+                            sigma_par = this.sigma;
+                            energy_par = this.energy;
+                            chi2_mat = zeros(n_steps, n_steps);
+                            
+                            parfor m = 1 : n_steps
+                                para_range_2_par = para_range_2;
+                                para_all_par = para_all;
+                                indices_par = indices;
+                                for n = 1 : n_steps
+                                    lb_all_fix_two = lb_all;
+                                    lb_all_fix_two(indices_par(i)) = para_range_1(m);
+                                    lb_all_fix_two(indices_par(j)) = para_range_2_par(n);
+                                    ub_all_fix_two = ub_all;
+                                    ub_all_fix_two(indices_par(i)) = para_range_1(m);
+                                    ub_all_fix_two(indices_par(j)) = para_range_2_par(n);
+                                    
+                                    fitFun = @(p) (RefLayers.calculateRefPartialPara(q_par, p, lb_all_fix_two, ub_all_fix_two, sigma_par, energy_par) - ref_par) ./ err_par;
+                                    
+                                    newsel = lb_all_fix_two == ub_all_fix_two;
+                                    lb_partial_fix_two = lb_all_fix_two(~newsel);
+                                    ub_partial_fix_two = ub_all_fix_two(~newsel);
+                                    para_partial_fix_two = para_all_par(~newsel);
+                                    [~, chi2] = lsqnonlin(fitFun, para_partial_fix_two, lb_partial_fix_two, ub_partial_fix_two, options);
+                                    
+                                    chi2_mat(m, n) = chi2;
+                                    
+                                end
+                            end
+                            
+                            lk = chi2_mat;
+                            lk = exp(-(lk-min(lk(:)))/2);
+                            result.likelihood = lk/sum(lk(:));
+                            result.chi2 = chi2_mat;
+                            result.confidence = this.confidenceContour(para_range_1, para_range_2, result.likelihood, 0.95);
+                            
+                            results{i, j} = result;
+                            
+                        end
+                    end
+                    toc;
+                    this.fits.two = results;
             end
             
         end
@@ -410,7 +565,7 @@ classdef RefLayers < handle
             
             names = cell(1, n_layer * 2 - 1);
             names{1} = 'Qz-Offset';
-            names{2} = 'Top_ED';
+            names{2} = 'Top-ED';
             names{n_layer + 1} = 'Bottom-ED';
             for i = 1 : n_layer - 2
                 names{n_layer + 1 - i} = ['Layer-', num2str(i), '-ED'];
@@ -423,6 +578,61 @@ classdef RefLayers < handle
             
             r = (q - sqrt(q.^2 - ones(size(q)) * qc^2)) ./ (q + sqrt(q.^2 - ones(size(q)) * qc^2));
             f = r .* conj(r);
+            
+        end
+        
+        function ref = calculateRefPartialPara(q, para_partial, lb_all, ub_all, sigma, energy)
+            
+            para_full = lb_all;
+            sel = lb_all == ub_all;
+            para_full(~sel) = para_partial;
+            
+            n_layer = (length(para_full) + 1) / 2;
+            qoff = para_full(1);
+            thick = [Inf, para_full(end : -1 : end - n_layer + 3), Inf];
+            ED = fliplr(para_full(2 : n_layer + 1));
+            
+            pro = RefLayers.generateSmoothProfile(ED, thick, sigma);
+            wl = RefLayers.calculateWavelength(energy);
+            qc = RefLayers.calculateQc(ED(1), wl);
+            
+            ref = RefLayers.parratt(pro.ed, pro.thickness, q + qoff, qc);
+            
+        end
+        
+        function y = bellCurve(x, paras)
+            
+            y = paras(1) * exp( -(x - paras(2)).^2 / 2 / paras(3)^2 );
+            
+        end
+        
+        function result = confidenceContour(xdata, ydata, likelihood, confidence)
+            
+            if nargin == 3
+                confidence = 0.95;
+            end
+            
+            lk1 = sort(likelihood(:));
+            lksum = cumsum(lk1);
+            lksum = abs(lksum - (1 - confidence));
+            ind = find(lksum == min(lksum), 1);
+            cLevel = lk1(ind);
+            
+            C = contourc(xdata,ydata,likelihood,[cLevel,cLevel]);
+            C = C(:,C(1,:) >= min(xdata));
+            C = C(:,C(1,:) <= max(xdata));
+            C = C(:,C(2,:) >= min(ydata));
+            C = C(:,C(2,:) <= max(ydata));
+            
+            [ind1, ind2] = find(likelihood == max(likelihood(:)), 1);
+            centerIndices = [ind1, ind2];
+            centerValues = [xdata(ind1), ydata(ind2)];
+            confidenceWindow = [min(C(1,:)),max(C(1,:));min(C(2,:)),max(C(2,:))];
+            
+            result.contour = C;
+            result.centerIndices = centerIndices;
+            result.centerValues = centerValues;
+            result.confidenceWindow = confidenceWindow;
             
         end
         
