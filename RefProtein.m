@@ -6,11 +6,18 @@ classdef RefProtein < handle
         pdb
         ed
         
+        density = 5 % number of protein molecules per 100 nm^2
+        theta = 0 % degrees
+        phi = 0 % degrees
+        insertion = 0 % angstrom
+        
+        gridSize = 0.5
+        
     end
     
     methods
         
-        function this = ProteinEd(file)
+        function this = RefProtein(file)
             
             if nargin == 0
                 [filename, pathname] = uigetfile('*', 'Select the pdb file.');
@@ -36,119 +43,14 @@ classdef RefProtein < handle
             
         end
         
-        function generateEdProfiles(this, theta, phi)
-            
-            if nargin == 1
-                theta = 0 : 5 : 180;
-                phi = 0 : 10 : 350;
-            end
-            
-            gridSize = 0.5;
-            this.ed.gridSize = gridSize;
-            this.ed.theta = theta;
-            this.ed.phi = phi;
-            
-            m = length(theta);
-            n = length(phi);
-            this.ed.area = zeros(m, n);
-            this.ed.profiles = cell(m, n);
-            N = length(this.pdb.x);
-            
-            tic;
-            for i = 1 : m
-                for j = 1 : n
-                    
-                    positions = [1, 0, 0; 0, cos(theta(i)), -sin(theta(i)); 0, sin(theta(i)), cos(theta(i))]...
-                        * [cos(phi(j)), -sin(phi(j)), 0; sin(phi(j)), cos(phi(j)), 0; 0, 0, 1]...
-                        * [this.pdb.x; this.pdb.y; this.pdb.z];
-                    
-                    x = positions(1, :);
-                    y = positions(2, :);
-                    z = positions(3, :);
-                    
-                    xtop = max(x + this.pdb.radius) + 1e-10;
-                    xbot = min(x - this.pdb.radius) - 1e-10;
-                    ytop = max(y + this.pdb.radius) + 1e-10;
-                    ybot = min(y - this.pdb.radius) - 1e-10;
-                    ztop = max(z + this.pdb.radius) + 1e-10;
-                    zbot = min(z - this.pdb.radius) - 1e-10;
-                    
-                    xn = ceil((xtop - xbot) / gridSize);
-                    yn = ceil((ytop - ybot) / gridSize);
-                    zn = ceil((ztop - zbot) / gridSize);
-                    
-                    x_grid_pos = xbot + gridSize * ((-1 : xn) + 0.5);
-                    y_grid_pos = ybot + gridSize * ((-1 : yn) + 0.5);
-                    z_grid_pos = zbot + gridSize * ((-1 : zn) + 0.5);
-                    
-                    grid_x = repmat(x_grid_pos, N, 1);
-                    [x_top_indices(:, 1), x_top_indices(:, 2)] = find(grid_x >= (x + this.pdb.radius)' & grid_x < (x + this.pdb.radius + gridSize)');
-                    [x_bot_indices(:, 1), x_bot_indices(:, 2)] = find(grid_x <= (x - this.pdb.radius)' & grid_x > (x - this.pdb.radius - gridSize)');
-                    
-                    grid_y = repmat(y_grid_pos, N, 1);
-                    [y_top_indices(:, 1), y_top_indices(:, 2)] = find(grid_y >= (y + this.pdb.radius)' & grid_y < (y + this.pdb.radius + gridSize)');
-                    [y_bot_indices(:, 1), y_bot_indices(:, 2)] = find(grid_y <= (y - this.pdb.radius)' & grid_y > (y - this.pdb.radius - gridSize)');
-                    
-                    grid_z = repmat(z_grid_pos, N, 1);
-                    [z_top_indices(:, 1), z_top_indices(:, 2)] = find(grid_z >= (z + this.pdb.radius)' & grid_z < (z + this.pdb.radius + gridSize)');
-                    [z_bot_indices(:, 1), z_bot_indices(:, 2)] = find(grid_z <= (z - this.pdb.radius)' & grid_z > (z - this.pdb.radius - gridSize)');
-                    
-                    x_top_indices = sortrows(x_top_indices);
-                    y_top_indices = sortrows(y_top_indices);
-                    z_top_indices = sortrows(z_top_indices);
-                    x_bot_indices = sortrows(x_bot_indices);
-                    y_bot_indices = sortrows(y_bot_indices);
-                    z_bot_indices = sortrows(z_bot_indices);
-                    
-                    [xf_grid, yf_grid, zf_grid] = meshgrid(x_grid_pos, y_grid_pos, z_grid_pos);
-                    
-                    xf_grid = permute(xf_grid, [2, 1, 3]);
-                    yf_grid = permute(yf_grid, [2, 1, 3]);
-                    zf_grid = permute(zf_grid, [2, 1, 3]);
-                    
-                    Elec_grid = zeros(xn + 2, yn + 2, zn + 2);
-                    for k = 1 : N
-                        
-                        Elec_frac = zeros(x_top_indices(k, 2)-x_bot_indices(k, 2)+1, y_top_indices(k, 2)-y_bot_indices(k, 2)+1, z_top_indices(k, 2)-z_bot_indices(k, 2)+1);
-                        
-                        atomdist = (xf_grid(x_bot_indices(k, 2):x_top_indices(k, 2),y_bot_indices(k, 2):y_top_indices(k, 2), z_bot_indices(k, 2):z_top_indices(k, 2)) - x(k)).^2 ...
-                            + (yf_grid(x_bot_indices(k, 2):x_top_indices(k, 2),y_bot_indices(k, 2):y_top_indices(k, 2), z_bot_indices(k, 2):z_top_indices(k, 2)) - y(k)).^2 ...
-                            + (zf_grid(x_bot_indices(k, 2):x_top_indices(k, 2),y_bot_indices(k, 2):y_top_indices(k, 2), z_bot_indices(k, 2):z_top_indices(k, 2)) - z(k)).^2;
-                        
-                        ind_list = (atomdist <= this.pdb.radius(k)^2);
-                        
-                        Elec_frac(ind_list) = (this.pdb.electron(k) * gridSize^3)/(4 / 3 * pi * this.pdb.radius(k)^3);
-                        
-                        Elec_grid(x_bot_indices(k, 2):x_top_indices(k, 2),y_bot_indices(k, 2):y_top_indices(k, 2), z_bot_indices(k, 2):z_top_indices(k, 2))...
-                            = Elec_grid(x_bot_indices(k, 2):x_top_indices(k, 2),y_bot_indices(k, 2):y_top_indices(k, 2), z_bot_indices(k, 2):z_top_indices(k, 2)) + Elec_frac;
-                         
-                    end
-                    
-                    numgridarea = any(Elec_grid, 3);
-                    minareagrid = sum(numgridarea(:));
-                    
-                    this.ed.area(i, j) = minareagrid * gridSize^2;
-                    profile = zeros(zn+2, 3);
-                    profile(:, 1) = z_grid_pos';
-                    profile(:, 2) = squeeze(sum(sum(Elec_grid, 1), 2)) / (gridSize^3 * minareagrid);
-                    logic_elec_grid = Elec_grid > 0;
-                    profile(:, 3) = (minareagrid - squeeze(sum(sum(logic_elec_grid, 1), 2))) / minareagrid;
-                    this.ed.profiles{i, j} = profile;
-                    
-                end
-            end
-            toc;
-            
-        end
-        
-        function [profile, area] = generateSingleEdProfile(this, theta, phi)
+        function [ed, thickness, area] = generateSingleEdProfile(this, theta, phi)
             
             if nargin == 1
                 theta = 0;
                 phi = 0;
             end
             
-            gridSize = 0.5;
+            gs = this.gridSize;
             
             N = length(this.pdb.x);
             
@@ -167,25 +69,25 @@ classdef RefProtein < handle
             ztop = max(z + this.pdb.radius) + 1e-10;
             zbot = min(z - this.pdb.radius) - 1e-10;
             
-            xn = ceil((xtop - xbot) / gridSize);
-            yn = ceil((ytop - ybot) / gridSize);
-            zn = ceil((ztop - zbot) / gridSize);
+            xn = ceil((xtop - xbot) / gs);
+            yn = ceil((ytop - ybot) / gs);
+            zn = ceil((ztop - zbot) / gs);
             
-            x_grid_pos = xbot + gridSize * ((-1 : xn) + 0.5);
-            y_grid_pos = ybot + gridSize * ((-1 : yn) + 0.5);
-            z_grid_pos = zbot + gridSize * ((-1 : zn) + 0.5);
+            x_grid_pos = xbot + gs * ((-1 : xn) + 0.5);
+            y_grid_pos = ybot + gs * ((-1 : yn) + 0.5);
+            z_grid_pos = zbot + gs * ((-1 : zn) + 0.5);
             
             grid_x = repmat(x_grid_pos, N, 1);
-            [x_top_indices(:, 1), x_top_indices(:, 2)] = find(grid_x >= (x + this.pdb.radius)' & grid_x < (x + this.pdb.radius + gridSize)');
-            [x_bot_indices(:, 1), x_bot_indices(:, 2)] = find(grid_x <= (x - this.pdb.radius)' & grid_x > (x - this.pdb.radius - gridSize)');
+            [x_top_indices(:, 1), x_top_indices(:, 2)] = find(grid_x >= (x + this.pdb.radius)' & grid_x < (x + this.pdb.radius + gs)');
+            [x_bot_indices(:, 1), x_bot_indices(:, 2)] = find(grid_x <= (x - this.pdb.radius)' & grid_x > (x - this.pdb.radius - gs)');
             
             grid_y = repmat(y_grid_pos, N, 1);
-            [y_top_indices(:, 1), y_top_indices(:, 2)] = find(grid_y >= (y + this.pdb.radius)' & grid_y < (y + this.pdb.radius + gridSize)');
-            [y_bot_indices(:, 1), y_bot_indices(:, 2)] = find(grid_y <= (y - this.pdb.radius)' & grid_y > (y - this.pdb.radius - gridSize)');
+            [y_top_indices(:, 1), y_top_indices(:, 2)] = find(grid_y >= (y + this.pdb.radius)' & grid_y < (y + this.pdb.radius + gs)');
+            [y_bot_indices(:, 1), y_bot_indices(:, 2)] = find(grid_y <= (y - this.pdb.radius)' & grid_y > (y - this.pdb.radius - gs)');
             
             grid_z = repmat(z_grid_pos, N, 1);
-            [z_top_indices(:, 1), z_top_indices(:, 2)] = find(grid_z >= (z + this.pdb.radius)' & grid_z < (z + this.pdb.radius + gridSize)');
-            [z_bot_indices(:, 1), z_bot_indices(:, 2)] = find(grid_z <= (z - this.pdb.radius)' & grid_z > (z - this.pdb.radius - gridSize)');
+            [z_top_indices(:, 1), z_top_indices(:, 2)] = find(grid_z >= (z + this.pdb.radius)' & grid_z < (z + this.pdb.radius + gs)');
+            [z_bot_indices(:, 1), z_bot_indices(:, 2)] = find(grid_z <= (z - this.pdb.radius)' & grid_z > (z - this.pdb.radius - gs)');
             
             x_top_indices = sortrows(x_top_indices);
             y_top_indices = sortrows(y_top_indices);
@@ -211,22 +113,20 @@ classdef RefProtein < handle
                 
                 ind_list = (atomdist <= this.pdb.radius(k)^2);
                 
-                Elec_frac(ind_list) = (this.pdb.electron(k) * gridSize^3)/(4 / 3 * pi * this.pdb.radius(k)^3);
+                Elec_frac(ind_list) = (this.pdb.electron(k) * gs^3)/(4 / 3 * pi * this.pdb.radius(k)^3);
                 
                 Elec_grid(x_bot_indices(k, 2):x_top_indices(k, 2),y_bot_indices(k, 2):y_top_indices(k, 2), z_bot_indices(k, 2):z_top_indices(k, 2))...
                     = Elec_grid(x_bot_indices(k, 2):x_top_indices(k, 2),y_bot_indices(k, 2):y_top_indices(k, 2), z_bot_indices(k, 2):z_top_indices(k, 2)) + Elec_frac;
                 
             end
             
-            numgridarea = any(Elec_grid, 3);
-            minareagrid = sum(numgridarea(:));
+            thickness = ones(1, zn + 2) * gs;
+            area = squeeze(sum(sum(Elec_grid > 0, 1), 2))' * gs^2;
+            area(area == 0) = 1; % to avoid division by zero
+            ed = squeeze(sum(sum(Elec_grid, 1), 2))' ./ area / gs;
             
-            area = minareagrid * gridSize^2;
-            profile = zeros(zn+2, 3);
-            profile(:, 1) = z_grid_pos';
-            profile(:, 2) = squeeze(sum(sum(Elec_grid, 1), 2)) / (gridSize^3 * minareagrid);
-            logic_elec_grid = Elec_grid > 0;
-            profile(:, 3) = (minareagrid - squeeze(sum(sum(logic_elec_grid, 1), 2))) / minareagrid;
+            area = flipud(area);
+            ed = flipud(ed);
             
         end
         
@@ -249,12 +149,12 @@ classdef RefProtein < handle
             pos_bottom = min(positions - repmat(this.pdb.radius, 3, 1), [], 2) - 1e-10;
             pos_top = max(positions + repmat(this.pdb.radius, 3, 1), [], 2) + 1e-10;
             sizes = pos_top - pos_bottom;
-            dimensions = ceil(sizes / this.ed.gridSize);
+            dimensions = ceil(sizes / this.gridSize);
             
             grids = cell(1, 3);
             
             for i = 1 : 3
-                grids{i} = pos_bottom(i, :) + this.ed.gridSize * (0 : dimensions(i));
+                grids{i} = pos_bottom(i, :) + this.gridSize * (0 : dimensions(i));
             end
             
         end

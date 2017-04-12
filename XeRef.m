@@ -38,8 +38,6 @@ classdef XeRef < handle
                 createFittingControls();
                 createOutputandSaveButtons();
                 
-                createProteinParameterTable();
-                
                 function initializeView()
                     
                     screenSize = [335, 300, 1250, 800];
@@ -173,40 +171,40 @@ classdef XeRef < handle
                     this.gui.parametersTableTitle = uicontrol(rightPanel,'Style','text','String','Fitting Parameters:',...
                         'Units','normalized','HorizontalAlignment','left', 'Position', [0.025 0.89 0.3 0.025]);
                     
+                    this.gui.toggleProtein = uicontrol(rightPanel,'Style','radiobutton','String','Add Protein Layer',...
+                        'Units','normalized', 'Position',[0.68 0.89 0.4 0.03]);
+                    
                     this.gui.parametersTable = uitable(rightPanel,'Data', tableData,'ColumnName', colName,...
                         'ColumnFormat', colFormat,'ColumnEditable', [true true true true true],'Units','normalized',...
-                        'ColumnWidth',colWidth,'RowName',rowName,'RowStriping','off', 'Position', [0.025 0.69 0.935 0.2]);
+                        'ColumnWidth',colWidth,'RowName',rowName,'RowStriping','off', 'Position', [0.025 0.455 0.935 0.43]);
                     
                     this.gui.addLayer = uicontrol(rightPanel,'Style','pushbutton','String', 'Add', 'Units','normalized',...
-                        'Position', [0.725 0.655 0.11 0.03]);
+                        'Position', [0.725 0.42 0.11 0.03]);
                     
                     this.gui.deleteLayer = uicontrol(rightPanel,'Style','pushbutton','String', 'Delete',...
-                        'Units','normalized', 'Position', [0.84 0.655 0.12 0.03]);
+                        'Units','normalized', 'Position', [0.84 0.42 0.12 0.03]);
                     
                 end
                 
-                function createProteinParameterTable()
-                    
-                    rightPanel = this.gui.rightPanel;
-                    
-                    this.gui.toggleProtein = uicontrol(rightPanel,'Style','radiobutton','String','Add Protein Layer',...
-                        'Units','normalized', 'Position',[0.015 0.655 0.4 0.03]);
-                    
-                    this.gui.proteinOrientationText = uicontrol(rightPanel,'Style','text','String','Protein parameters:',...
-                        'Units','normalized','HorizontalAlignment','left', 'Position',[0.025 0.625 0.3 0.03]);
-                    
-                    rowName = {'Theta', 'Phi', 'Insertion', 'Coverage'};
-                    colName = {'Min','Max','Start','Fix','Plot'};
-                    colFormat = {'numeric','numeric','numeric','logical','logical'};
-                    colWidth = {55 55 55 30 30};
-                    tableData = {0, 180, 0, false, false; 0, 350, 0, false, false; 0, 10, 0, false, false;...
-                        0, 1, 0, false, false};
-                    
-                    this.gui.proteinParaTable = uitable(rightPanel,'Data', tableData,'ColumnName', colName,...
-                        'ColumnFormat', colFormat,'ColumnEditable', [true true true true true],'Units','normalized',...
-                        'ColumnWidth',colWidth,'RowName',rowName,'RowStriping','off', 'Position', [0.025 0.43 0.935 0.2]);
-                    
-                end
+%                 function createProteinParameterTable()
+%                     
+%                     rightPanel = this.gui.rightPanel;
+%                     
+%                     this.gui.proteinOrientationText = uicontrol(rightPanel,'Style','text','String','Protein parameters:',...
+%                         'Units','normalized','HorizontalAlignment','left', 'Position',[0.025 0.625 0.3 0.03]);
+%                     
+%                     rowName = {'Theta', 'Phi', 'Insertion', 'Coverage'};
+%                     colName = {'Min','Max','Start','Fix','Plot'};
+%                     colFormat = {'numeric','numeric','numeric','logical','logical'};
+%                     colWidth = {55 55 55 30 30};
+%                     tableData = {0, 180, 0, false, false; 0, 350, 0, false, false; 0, 10, 0, false, false;...
+%                         0, 1, 0, false, false};
+%                     
+%                     this.gui.proteinParaTable = uitable(rightPanel,'Data', tableData,'ColumnName', colName,...
+%                         'ColumnFormat', colFormat,'ColumnEditable', [true true true true true],'Units','normalized',...
+%                         'ColumnWidth',colWidth,'RowName',rowName,'RowStriping','off', 'Position', [0.025 0.43 0.935 0.2]);
+%                     
+%                 end
                 
                 function createFittingControls()
                     
@@ -298,7 +296,6 @@ classdef XeRef < handle
                 this.gui.addLayer.Callback = @(varargin) this.control('add-layer');
                 this.gui.deleteLayer.Callback = @(varargin) this.control('delete-layers');
                 this.gui.parametersTable.CellEditCallback = @(source, eventdata, varargin) this.control('parameter-table', eventdata);
-                this.gui.proteinParaTable.CellEditCallback = @(source, eventdata, varargin) this.control('protein-table', eventdata);
                 
                 % fitting
                 this.gui.fitButton.Callback = @(varargin) this.control('fit');
@@ -375,17 +372,17 @@ classdef XeRef < handle
                             pData = readParameterTable();
                             this.model(state, trigger, pData);
                             this.view(state, 'update-starts-follow-up');
-                        case 'protein-table'
-                            eventdata = varargin{1};
-                            viewUpdate = proteinParaEditEntailsUpdate(eventdata);
-                            if viewUpdate
-                                tdata = readProteinParaTable();
-                                this.view(state, trigger, tdata);
-                            end
-                        case 'toggle-protein'
-                            tdata = readProteinParaTable();
-                            this.model(state, trigger, tdata);
-                            this.view(state, trigger);
+%                         case 'protein-table'
+%                             eventdata = varargin{1};
+%                             viewUpdate = proteinParaEditEntailsUpdate(eventdata);
+%                             if viewUpdate
+%                                 tdata = readProteinParaTable();
+%                                 this.view(state, trigger, tdata);
+%                             end
+%                         case 'toggle-protein'
+%                             tdata = readProteinParaTable();
+%                             this.model(state, trigger, tdata);
+%                             this.view(state, trigger);
                         otherwise
                             sprintf('State: %s, trigger: %s is not found for the controller', state, trigger)
                     end
@@ -469,25 +466,25 @@ classdef XeRef < handle
                 
             end
             
-            function viewUpdate = proteinParaEditEntailsUpdate(eventdata)
-                viewUpdate = false;
-                ind1 = eventdata.Indices(1);
-                ind2 = eventdata.Indices(2);
-                table = this.gui.proteinParaTable;
-                switch ind2
-                    case 1
-                    case 2
-                    case 3
-                        if table.Data{ind1, ind2} > table.Data{ind1, 2}
-                            table.Data{ind1, 2} = table.Data{ind1, ind2};
-                        elseif table.Data{ind1, ind2} < table.Data{ind1, 1}
-                            table.Data{ind1, 1} = table.Data{ind1, ind2};
-                        end
-                        viewUpdate = true;
-                    case 4
-                    case 5
-                end
-            end
+%             function viewUpdate = proteinParaEditEntailsUpdate(eventdata)
+%                 viewUpdate = false;
+%                 ind1 = eventdata.Indices(1);
+%                 ind2 = eventdata.Indices(2);
+%                 table = this.gui.proteinParaTable;
+%                 switch ind2
+%                     case 1
+%                     case 2
+%                     case 3
+%                         if table.Data{ind1, ind2} > table.Data{ind1, 2}
+%                             table.Data{ind1, 2} = table.Data{ind1, ind2};
+%                         elseif table.Data{ind1, ind2} < table.Data{ind1, 1}
+%                             table.Data{ind1, 1} = table.Data{ind1, ind2};
+%                         end
+%                         viewUpdate = true;
+%                     case 4
+%                     case 5
+%                 end
+%             end
             
             function t = readParameterTable()
                 
@@ -506,19 +503,19 @@ classdef XeRef < handle
                 
             end
             
-            function t = readProteinParaTable()
-                
-                dat = this.gui.proteinParaTable.Data;
-                
-                mat = cell2mat(dat(:, 1:3));
-                
-                t.p0 = mat(:, 3)';
-                t.lb = mat(:, 1)';
-                t.ub = mat(:, 2)';
-                t.theta = mat(1, 3);
-                t.phi = mat(2, 3);
-                
-            end
+%             function t = readProteinParaTable()
+%                 
+%                 dat = this.gui.proteinParaTable.Data;
+%                 
+%                 mat = cell2mat(dat(:, 1:3));
+%                 
+%                 t.p0 = mat(:, 3)';
+%                 t.lb = mat(:, 1)';
+%                 t.ub = mat(:, 2)';
+%                 t.theta = mat(1, 3);
+%                 t.phi = mat(2, 3);
+%                 
+%             end
             
         end
         
@@ -567,10 +564,11 @@ classdef XeRef < handle
                             this.protein = RefProtein(this.pdbFiles{this.gui.pdbFiles.Value(1)});
                         case 'toggle-protein'
                             if this.gui.toggleProtein.Value
-                                tdata = varargin{1};
-                                this.layers.protein = this.protein;
+%                                 tdata = varargin{1};
+                                this.layers.addProtein(this.pdbFiles{this.gui.pdbFiles.Value(1)});
+%                                 this.layers.protein = this.protein;
                             else
-                                this.layers.protein = [];
+                                this.layers.removeProtein();
                             end
                     end
                 otherwise
@@ -690,6 +688,8 @@ classdef XeRef < handle
                             theta = tdata.theta;
                             phi = tdata.phi;
                             lowerPlot(theta, phi);
+                        case 'toggle-protein'
+                            lowerPlot();
                     end
                 otherwise
                     disp('Case: %s is not found for the view', state);

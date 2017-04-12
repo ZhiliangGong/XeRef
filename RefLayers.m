@@ -42,7 +42,15 @@ classdef RefLayers < handle
         
         function addProtein(this, file)
             
-            this.protein = ProteinEd(file);
+            this.protein = RefProtein(file);
+            this.getSmoothEdProfile();
+            
+        end
+        
+        function removeProtein(this)
+            
+            this.protein = [];
+            this.getSmoothEdProfile();
             
         end
         
@@ -458,7 +466,106 @@ classdef RefLayers < handle
                 this.sigma = sigma;
             end
             
-            this.profile = this.generateSmoothProfile(this.ed, this.thickness, this.sigma);
+            if isempty(this.protein)
+                this.profile = this.calculateSmoothEdProfile(this.ed, this.thickness, this.sigma);
+            else
+                [ed_pro, thick_pro] = this.getCoarseEdProfile();
+                this.profile = this.calculateSmoothEdProfile(ed_pro, thick_pro);
+            end
+            
+        end
+        
+        function [ed, thick] = getCoarseEdProfile(this)
+            
+            if isempty(this.protein)
+                ed = this.ed;
+                thick = this.thickness;
+            else
+                [pro_ed, pro_thick, pro_area] = this.protein.generateSingleEdProfile();
+                
+                % top and bottom position of protein
+                pro_top = this.protein.insertion;
+                pro_length = sum(pro_thick);
+                grid_n = length(pro_ed);
+                pro_bot = pro_top - pro_length;
+                
+                interface_z = cumsum([0, this.thickness( 2 : end - 1)]);
+                layer_top_z = [interface_z, Inf];
+                layer_bot_z = [-Inf, interface_z];
+                
+                % obtain the layers without intersection with the protein
+                sel_top = layer_bot_z >= pro_top | layer_top_z == Inf;
+                ed_top = this.ed(sel_top);
+                thick_top = this.thickness(sel_top);
+                
+                sel_bot = layer_top_z <= pro_bot | layer_bot_z == -Inf;
+                ed_bot = this.ed(sel_bot);
+                thick_bot = this.thickness(sel_bot);
+                
+                % find the layer that has the top/bottom edges of the protein
+                sel_pro_top = layer_top_z >= pro_top & layer_bot_z < pro_top;
+                sel_pro_bot = layer_top_z >= pro_bot & layer_bot_z < pro_bot;
+                
+                % obtain the top part of protein free part of the layer
+                % that contains the top of the protein, or the other way
+                thick_partial_top = layer_top_z(sel_pro_top) - pro_top;
+                if thick_partial_top ~= 0 && thick_partial_top ~= Inf
+                    ed_top = [this.ed(sel_pro_top), ed_top];
+                    thick_top = [thick_partial_top, thick_top];
+                end
+                
+                thick_partial_bot = pro_bot - layer_bot_z(sel_pro_bot);
+                if thick_partial_bot ~=0 && thick_partial_bot ~= Inf
+                    ed_bot = [ed_bot, this.ed(sel_pro_bot)];
+                    thick_bot = [thick_bot, thick_partial_bot];
+                end
+                
+                % find the interfaces that goes through the protein
+                through_z = interface_z(interface_z < pro_top & interface_z > pro_bot);
+                pro_n = length(pro_ed);
+                pro_grid_top_z = (1 : pro_n) * this.protein.gridSize - pro_length + this.protein.insertion;
+                pro_grid_bot_z = pro_grid_top_z - this.protein.gridSize;
+                
+                % find the grids to be broken into two
+                sel_break = through_z' <= pro_grid_top_z & through_z' > pro_grid_bot_z;
+                [~, ind_2] = find(sel_break);
+                
+                sel_ed = sort([1 : grid_n, ind_2']);
+                pro_ed_new = pro_ed(sel_ed);
+                pro_area_new = pro_area(sel_ed);
+                pro_thick_new = pro_thick(sel_ed);
+                
+                for i = 1 : length(ind_2)
+                    pro_thick_new(ind_2(i) + i - 1) = through_z(i) - pro_grid_bot_z(ind_2(i));
+                    pro_thick_new(ind_2(i) + i ) = pro_grid_top_z(ind_2(i)) - through_z(i);
+                end
+                
+                sel_nonzero = pro_thick_new ~= 0;
+                pro_thick_new = pro_thick_new(sel_nonzero);
+                pro_ed_new = pro_ed_new(sel_nonzero);
+                pro_area_new = pro_area_new(sel_nonzero);
+                pro_grid_top_z_new = cumsum(pro_thick_new) - pro_length + this.protein.insertion;
+                pro_grid_bot_z_new = pro_grid_top_z_new - pro_thick_new;
+                
+                % identify the layers that intersets with the protein and
+                % loop through them
+                sel_overlap = (layer_top_z >= pro_top & layer_bot_z < pro_top)...
+                    | (layer_top_z >= pro_bot & layer_bot_z < pro_bot)...
+                    | (layer_top_z < pro_top & layer_bot_z > pro_bot);
+                indices = find(sel_overlap);
+                composite_ed = zeros(size(pro_ed_new));
+                % num_per_100nm2 = this.protein.density;
+                num_per_100nm2 = 6;
+                for i = 1 : length(indices)
+                    sel_between = pro_grid_bot_z_new >= layer_bot_z(indices(i)) & pro_grid_top_z_new <= layer_top_z(indices(i));
+                    area_frac = pro_area_new(sel_between) * num_per_100nm2 / 1e4;
+                    composite_ed(sel_between) = pro_ed_new(sel_between) .* area_frac + this.ed(indices(i)) * (1 - area_frac);
+                end
+                
+                ed = [ed_bot, composite_ed, ed_top];
+                thick = [thick_bot, pro_thick_new, thick_top];
+                
+            end
             
         end
         
@@ -466,7 +573,7 @@ classdef RefLayers < handle
     
     methods(Static)
         
-        function profile = generateSmoothProfile(ed, thickness, sigma)
+        function profile = calculateSmoothEdProfile(ed, thickness, sigma)
             
             if nargin == 2
                 sigma = 3.3;
