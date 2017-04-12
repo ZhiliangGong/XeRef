@@ -6,11 +6,6 @@ classdef RefProtein < handle
         pdb
         ed
         
-        density = 5 % number of protein molecules per 100 nm^2
-        theta = 0 % degrees
-        phi = 0 % degrees
-        insertion = 0 % angstrom
-        
         gridSize = 0.5
         
     end

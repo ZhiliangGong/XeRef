@@ -13,6 +13,11 @@ classdef RefLayers < handle
         
         protein
         
+        density = 0
+        insertion = 0
+        theta = 0
+        phi = 0
+        
     end
     
     methods
@@ -32,24 +37,21 @@ classdef RefLayers < handle
             
         end
         
-        function updateModel(this, ed, thickness)
+        function updateModel(this, paras)
             
-            this.ed = ed;
-            this.thickness = thickness;
-            this.getSmoothEdProfile();
+            this.ed = paras.ed;
+            this.thickness = paras.thickness;
             
-        end
-        
-        function addProtein(this, file)
+            if paras.pro
+                this.protein = paras.protein;
+                this.density = paras.density;
+                this.insertion = paras.insertion;
+                this.theta = paras.theta;
+                this.phi = paras.phi;
+            else
+                this.protein = [];
+            end
             
-            this.protein = RefProtein(file);
-            this.getSmoothEdProfile();
-            
-        end
-        
-        function removeProtein(this)
-            
-            this.protein = [];
             this.getSmoothEdProfile();
             
         end
@@ -68,17 +70,21 @@ classdef RefLayers < handle
             
         end
         
-        function ref = getRefForFullPara(this, q, paras)
+        function ref = getRefForFullPara(this, q, full_para)
             
-            n_layer = (length(paras) + 1) / 2;
-            qoff = paras(1);
-            thick = [Inf, paras(end : -1 : end - n_layer + 3), Inf];
-            ED = fliplr(paras(2 : n_layer + 1));
+            if isempty(this.protein)
+                n_layer = (length(full_para) + 1) / 2;
+            else
+                n_layer = (length(full_para) - 3) / 2;
+            end
+            qoff = full_para(1);
+            thick = [Inf, full_para(n_layer * 2 - 1: -1 : n_layer + 2), Inf];
+            ED = full_para(n_layer + 1 : -1 : 2);
             
-            pro = this.generateSmoothProfile(ED, thick, this.sigma);
+            edProfile = this.calculateSmoothEdProfile(ED, thick, this.sigma);
             qc = this.calculateQc(ED(1), this.getWavelength());
             
-            ref = this.parratt(pro.ed, pro.thickness, q + qoff, qc);
+            ref = this.parratt(edProfile.ed, edProfile.thickness, q + qoff, qc);
             
         end
         
@@ -111,7 +117,7 @@ classdef RefLayers < handle
             sel = lb_all ~= ub_all;
             if sum(sel) > 0
                 this.fitAll(refData, para_all, lb_all, ub_all);
-                this.fitParaOneByOne_parallel(refData, para_all, lb_all, ub_all, n_steps);
+                this.fitParaOneByOne(refData, para_all, lb_all, ub_all, n_steps);
             end
             
         end
@@ -121,9 +127,9 @@ classdef RefLayers < handle
             sel = lb_all ~= ub_all;
             if sum(sel) > 0
                 this.fitAll(refData, para_all, lb_all, ub_all);
-                this.fitParaOneByOne_parallel(refData, para_all, lb_all, ub_all, n_steps);
+                this.fitParaOneByOne(refData, para_all, lb_all, ub_all, n_steps);
                 if sum(sel) > 1
-                    this.fitParaByPairs_parallel(refData, para_all, lb_all, ub_all, n_steps);
+                    this.fitParaByPairs(refData, para_all, lb_all, ub_all, n_steps);
                 end
             end
             
@@ -161,57 +167,7 @@ classdef RefLayers < handle
             
         end
         
-        function fitParaOneByOne_single(this, refData, para_all, lb_all, ub_all, n_steps)
-            
-            sel = lb_all ~= ub_all;
-            para_partial = para_all(sel);
-            
-            M = length(para_partial);
-            this.fits.one = cell(1, M);
-            
-            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'final');
-            
-            tic;
-            k = 1;
-            for i = 1 : length(sel)
-                if sel(i)
-                    para_range = linspace(lb_all(i), ub_all(i), n_steps);
-                    
-                    result.para_range = para_range;
-                    result.chi2 = zeros(1, n_steps);
-                    result.para_name = this.fits.all.para_names_all{i};
-                    
-                    for j = 1 : n_steps
-                        
-                        lb_all_fix_one = lb_all;
-                        lb_all_fix_one(i) = para_range(j);
-                        ub_all_fix_one = ub_all;
-                        ub_all_fix_one(i) = para_range(j);
-                        
-                        fitOneFun = @(p) (this.getRefForPartialPara(refData.q, p, lb_all_fix_one, ub_all_fix_one) - refData.ref) ./ refData.err;
-                        
-                        newsel = lb_all_fix_one ~= ub_all_fix_one;
-                        lb_partial_fix_one = lb_all_fix_one(newsel);
-                        ub_partial_fix_one = ub_all_fix_one(newsel);
-                        para_partial_fix_one = para_all(newsel);
-                        [~, chi2] = lsqnonlin(fitOneFun, para_partial_fix_one, lb_partial_fix_one, ub_partial_fix_one, options);
-                        result.chi2(j) = chi2;
-                        
-                    end
-                    
-                    lk = exp( - (result.chi2 - min(result.chi2)) / 2);
-                    result.likelihood = lk / sum(lk);
-                    
-                    this.fits.one{k} = result;
-                    k = k + 1;
-                end
-            end
-            
-            toc;
-            
-        end
-        
-        function fitParaOneByOne_parallel(this, refData, para_all, lb_all, ub_all, n_steps)
+        function fitParaOneByOne(this, refData, para_all, lb_all, ub_all, n_steps)
             
             sel = lb_all ~= ub_all;
             indices = find(sel);
@@ -277,85 +233,7 @@ classdef RefLayers < handle
             
         end
         
-        function fitParaByPairs_single(this, refData, para_all, lb_all, ub_all, n_steps)
-            
-            sel = lb_all ~= ub_all;
-            M = sum(sel);
-            
-            if M == 2
-                
-            elseif M > 2
-                
-                options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'final');
-                disp('Fitting paired parameters');
-                
-                results = cell(M, M);
-                
-                tic;
-                k = 1;
-                for i = 1 : length(sel) - 1
-                    
-                    if sel(i)
-                        
-                        l = k + 1;
-                        for j = i + 1 : length(sel)
-                            
-                            if sel(j)
-                                
-                                para_range_1 = linspace(lb_all(i), ub_all(i), n_steps);
-                                para_range_2 = linspace(lb_all(j), ub_all(j), n_steps);
-                                
-                                result.para_range_1 = para_range_1;
-                                result.para_range_2 = para_range_2;
-                                result.chi2 = zeros(n_steps, n_steps);
-                                result.para_names = this.fits.all.para_names_all([i, j]);
-                                
-                                for m = 1 : n_steps
-                                    for n = 1 : n_steps
-                                        lb_all_fix_two = lb_all;
-                                        lb_all_fix_two(i) = para_range_1(m);
-                                        lb_all_fix_two(j) = para_range_2(n);
-                                        ub_all_fix_two = ub_all;
-                                        ub_all_fix_two(i) = para_range_1(m);
-                                        ub_all_fix_two(j) = para_range_2(n);
-                                        
-                                        fitTwoFun = @(p) (this.getRefForPartialPara(refData.q, p, lb_all_fix_two, ub_all_fix_two) - refData.ref) ./ refData.err;
-                                        
-                                        newsel = lb_all_fix_two == ub_all_fix_two;
-                                        lb_partial_fix_two = lb_all_fix_two(~newsel);
-                                        ub_partial_fix_two = ub_all_fix_two(~newsel);
-                                        para_partial_fix_two = para_all(~newsel);
-                                        [~, chi2] = lsqnonlin(fitTwoFun, para_partial_fix_two, lb_partial_fix_two, ub_partial_fix_two, options);
-                                        
-                                        result.chi2(m, n) = chi2;
-                                        
-                                    end
-                                end
-                                
-                                lk = result.chi2;
-                                lk = exp(-(lk-min(lk(:)))/2);
-                                result.likelihood = lk/sum(lk(:));
-                                
-                                results{k, l} = result;
-                                
-                                l = l + 1;
-                                
-                            end
-                            
-                        end
-                        k = k + 1;
-                    end
-                    
-                end
-                toc;
-                
-                this.fits.two = results;
-                
-            end
-            
-        end
-        
-        function fitParaByPairs_parallel(this, refData, para_all, lb_all, ub_all, n_steps)
+        function fitParaByPairs(this, refData, para_all, lb_all, ub_all, n_steps)
             
             sel = lb_all ~= ub_all;
             indices = find(sel);
@@ -460,31 +338,77 @@ classdef RefLayers < handle
             
         end
         
-        function getSmoothEdProfile(this, sigma)
+        function getSmoothEdProfile(this)
             
-            if nargin == 2
-                this.sigma = sigma;
-            end
-            
-            if isempty(this.protein)
-                this.profile = this.calculateSmoothEdProfile(this.ed, this.thickness, this.sigma);
+            if isempty(this.protein) || this.density == 0
+                this.profile = this.calculateSmoothEdProfile(this.ed, this.thickness, this.sigma, 0);
             else
-                [ed_pro, thick_pro] = this.getCoarseEdProfile();
-                this.profile = this.calculateSmoothEdProfile(ed_pro, thick_pro);
+                [ed_pro, thick_pro, z_origin] = this.getCompositeEdProfile();
+                this.profile = this.calculateSmoothEdProfile(ed_pro, thick_pro, this.sigma, z_origin);
             end
             
         end
         
-        function [ed, thick] = getCoarseEdProfile(this)
+    end
+    
+    methods(Static)
+        
+        function profile = calculateSmoothEdProfile(ed, thickness, sigma, z_origin)
+            
+            if isempty(z_origin)
+                z_origin = 0;
+            end
+            
+            binSize = 0.25;
+            transSigma = 7;
+            transThickness = sum(thickness(2 : end - 1)) + 2 * transSigma * sigma;
+            binNumber = ceil(transThickness / binSize);
+            
+            thick = [0, thickness(2:end-1), 0];
+            
+            layerCenterPos = cumsum(thick) - thick / 2;
+            binPos = cumsum(ones(binNumber, 1) * binSize) - (transSigma * sigma) - binSize / 2;
+            
+            m = length(binPos);
+            n = length(layerCenterPos);
+            contributions = zeros(m, n);
+            
+            if n > 2
+                binPos_mat = repmat(binPos, 1, n - 2);
+                layerCenterPos_mat = repmat(layerCenterPos(2:end-1), m, 1);
+                thick_mat = repmat(thick(2:end-1), m, 1);
+                ed_mat = repmat(ed(2:end-1), m, 1);
+                contributions(:, 2: end-1) = (erf((binPos_mat - layerCenterPos_mat + thick_mat / 2) / sqrt(2) / sigma) ...
+                    + erf((- binPos_mat + layerCenterPos_mat + thick_mat / 2) / sqrt(2) / sigma)) / 2 .* ed_mat ;
+            end
+            
+            contributions(:, 1) = ed(1) * (erf(-binPos / sqrt(2) / sigma) + 1) / 2;
+            
+            breakPoints = [-Inf, 0, cumsum(thickness(2:end))];
+            
+            indices = binPos < repmat(breakPoints(2:end), m, 1) & binPos > repmat(breakPoints(1:end-1), m, 1);
+            
+            binEd = sum(contributions, 2);
+            profile.ed = binEd';
+            profile.z = binPos' - z_origin;
+            profile.thickness = ones(1, m) * binSize;
+            ed_mat = repmat(ed, m);
+            profile.layerEd = ed_mat(indices)';
+            
+        end
+        
+        function [ed, thick, z_origin] = getCompositeEdProfile(layer_ed, layer_thick, pro_ed, pro_thick, pro_area)
             
             if isempty(this.protein)
                 ed = this.ed;
                 thick = this.thickness;
+                z_origin = 0;
             else
-                [pro_ed, pro_thick, pro_area] = this.protein.generateSingleEdProfile();
+                [pro_ed, pro_thick, pro_area] = this.protein.generateSingleEdProfile(this.theta, this.phi);
+                pro_top = this.insertion;
+                num_per_100nm2 = this.density;
                 
                 % top and bottom position of protein
-                pro_top = this.protein.insertion;
                 pro_length = sum(pro_thick);
                 grid_n = length(pro_ed);
                 pro_bot = pro_top - pro_length;
@@ -523,7 +447,7 @@ classdef RefLayers < handle
                 % find the interfaces that goes through the protein
                 through_z = interface_z(interface_z < pro_top & interface_z > pro_bot);
                 pro_n = length(pro_ed);
-                pro_grid_top_z = (1 : pro_n) * this.protein.gridSize - pro_length + this.protein.insertion;
+                pro_grid_top_z = (1 : pro_n) * this.protein.gridSize - pro_length + this.insertion;
                 pro_grid_bot_z = pro_grid_top_z - this.protein.gridSize;
                 
                 % find the grids to be broken into two
@@ -544,7 +468,7 @@ classdef RefLayers < handle
                 pro_thick_new = pro_thick_new(sel_nonzero);
                 pro_ed_new = pro_ed_new(sel_nonzero);
                 pro_area_new = pro_area_new(sel_nonzero);
-                pro_grid_top_z_new = cumsum(pro_thick_new) - pro_length + this.protein.insertion;
+                pro_grid_top_z_new = cumsum(pro_thick_new) - pro_length + this.insertion;
                 pro_grid_bot_z_new = pro_grid_top_z_new - pro_thick_new;
                 
                 % identify the layers that intersets with the protein and
@@ -554,8 +478,6 @@ classdef RefLayers < handle
                     | (layer_top_z < pro_top & layer_bot_z > pro_bot);
                 indices = find(sel_overlap);
                 composite_ed = zeros(size(pro_ed_new));
-                % num_per_100nm2 = this.protein.density;
-                num_per_100nm2 = 6;
                 for i = 1 : length(indices)
                     sel_between = pro_grid_bot_z_new >= layer_bot_z(indices(i)) & pro_grid_top_z_new <= layer_top_z(indices(i));
                     area_frac = pro_area_new(sel_between) * num_per_100nm2 / 1e4;
@@ -564,56 +486,9 @@ classdef RefLayers < handle
                 
                 ed = [ed_bot, composite_ed, ed_top];
                 thick = [thick_bot, pro_thick_new, thick_top];
+                z_origin = pro_length - this.insertion;
                 
             end
-            
-        end
-        
-    end
-    
-    methods(Static)
-        
-        function profile = calculateSmoothEdProfile(ed, thickness, sigma)
-            
-            if nargin == 2
-                sigma = 3.3;
-            end
-            
-            binSize = 0.25;
-            transSigma = 7;
-            transThickness = sum(thickness(2 : end - 1)) + 2 * transSigma * sigma;
-            binNumber = ceil(transThickness / binSize);
-            
-            thick = [0, thickness(2:end-1), 0];
-            
-            layerCenterPos = cumsum(thick) - thick / 2;
-            binPos = cumsum(ones(binNumber, 1) * binSize) - (transSigma * sigma) - binSize / 2;
-            
-            m = length(binPos);
-            n = length(layerCenterPos);
-            contributions = zeros(m, n);
-            
-            if n > 2
-                binPos_mat = repmat(binPos, 1, n - 2);
-                layerCenterPos_mat = repmat(layerCenterPos(2:end-1), m, 1);
-                thick_mat = repmat(thick(2:end-1), m, 1);
-                ed_mat = repmat(ed(2:end-1), m, 1);
-                contributions(:, 2: end-1) = (erf((binPos_mat - layerCenterPos_mat + thick_mat / 2) / sqrt(2) / sigma) ...
-                    + erf((- binPos_mat + layerCenterPos_mat + thick_mat / 2) / sqrt(2) / sigma)) / 2 .* ed_mat ;
-            end
-            
-            contributions(:, 1) = ed(1) * (erf(-binPos / sqrt(2) / sigma) + 1) / 2;
-            
-            breakPoints = [-Inf, 0, cumsum(thickness(2:end))];
-            
-            indices = binPos < repmat(breakPoints(2:end), m, 1) & binPos > repmat(breakPoints(1:end-1), m, 1);
-            
-            binEd = sum(contributions, 2);
-            profile.ed = binEd';
-            profile.z = binPos';
-            profile.thickness = ones(1, m) * binSize;
-            ed_mat = repmat(ed, m);
-            profile.layerEd = ed_mat(indices)';
             
         end
         
@@ -699,7 +574,7 @@ classdef RefLayers < handle
             thick = [Inf, para_full(end : -1 : end - n_layer + 3), Inf];
             ED = fliplr(para_full(2 : n_layer + 1));
             
-            pro = RefLayers.generateSmoothProfile(ED, thick, sigma);
+            pro = RefLayers.calculateSmoothEdProfile(ED, thick, sigma);
             wl = RefLayers.calculateWavelength(energy);
             qc = RefLayers.calculateQc(ED(1), wl);
             
