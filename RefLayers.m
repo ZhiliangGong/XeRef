@@ -70,34 +70,6 @@ classdef RefLayers < handle
             
         end
         
-        function ref = getRefForFullPara(this, q, full_para)
-            
-            if isempty(this.protein)
-                n_layer = (length(full_para) + 1) / 2;
-            else
-                n_layer = (length(full_para) - 3) / 2;
-            end
-            qoff = full_para(1);
-            thick = [Inf, full_para(n_layer * 2 - 1: -1 : n_layer + 2), Inf];
-            ED = full_para(n_layer + 1 : -1 : 2);
-            
-            edProfile = this.calculateSmoothEdProfile(ED, thick, this.sigma);
-            qc = this.calculateQc(ED(1), this.getWavelength());
-            
-            ref = this.parratt(edProfile.ed, edProfile.thickness, q + qoff, qc);
-            
-        end
-        
-        function ref = getRefForPartialPara(this, q, para_partial, lb_all, ub_all)
-            
-            para_full = lb_all;
-            sel = lb_all == ub_all;
-            para_full(~sel) = para_partial;
-            
-            ref = this.getRefForFullPara(q, para_full);
-            
-        end
-        
         function dat = getFNR(this, q)
             
             if nargin == 1
@@ -137,20 +109,43 @@ classdef RefLayers < handle
         
         function fitAll(this, refData, para_all, lb_all, ub_all)
             
-            n_layer = (length(para_all) + 1) / 2;
+            if isempty(this.protein)
+                n_layer = (length(para_all) + 1) / 2;
+            else
+                n_layer = (length(para_all) - 3) / 2;
+            end
+            
             sel = lb_all == ub_all;
             para_partial = para_all(~sel);
             lb_partial = lb_all(~sel);
             ub_partial = ub_all(~sel);
             
-            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'none');
+            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'iter');
             
             % fit all varying parameters at once
             
-            fitAllFun = @(p) (this.getRefForPartialPara(refData.q, p, lb_all, ub_all) - refData.ref) ./ refData.err;
+            sigma_temp = this.sigma;
+            energy_temp = this.energy;
+            
+            if ~ isempty(this.protein)
+                pdb = this.protein.pdb;
+                gs = this.protein.gridSize;
+            else
+                pdb = [];
+                gs = [];
+            end
+            
+            fitAllFun = @(p) (RefLayers.calculateRefPartialPara(refData.q, p, lb_all, ub_all, sigma_temp, energy_temp, pdb, gs) - refData.ref) ./ refData.err;
             [para_fitted, chi2] = lsqnonlin(fitAllFun, para_partial, lb_partial, ub_partial, options);
             
-            this.fits.all.para_names_all = this.generateParaNames(n_layer);
+            if isempty(this.protein)
+                pro_flag = false;
+            else
+                pro_flag = true;
+            end
+            
+            this.fits.all.para_names_all = this.getParaNames(n_layer, pro_flag);
+            
             this.fits.all.para_names_fitted = this.fits.all.para_names_all(~sel);
             para_all = lb_all;
             para_all(~sel) = para_fitted;
@@ -161,7 +156,7 @@ classdef RefLayers < handle
             this.fits.all.q = refData.q;
             this.fits.all.ref = refData.ref;
             this.fits.all.err = refData.err;
-            this.fits.all.ref_fit = this.getRefForPartialPara(refData.q, para_fitted, lb_all, ub_all);
+            this.fits.all.ref_fit = RefLayers.calculateRefPartialPara(refData.q, para_fitted, lb_all, ub_all, sigma_temp, energy_temp, pdb, gs);
             qc = this.calculateQc(para_all(n_layer + 1), this.getWavelength());
             this.fits.all.ref_fit_fnr = this.fits.all.ref_fit ./ (this.calculateFresnel(refData.q, qc));
             
@@ -176,7 +171,7 @@ classdef RefLayers < handle
             M = length(para_partial);
             this.fits.one = cell(1, M);
             
-            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'none');
+            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'iter');
             
             % prepare for parfor loop
             q_par = refData.q;
@@ -184,6 +179,14 @@ classdef RefLayers < handle
             err_par = refData.err;
             sigma_par = this.sigma;
             energy_par = this.energy;
+            
+            if isempty(this.protein)
+                pdb = [];
+                gs = [];
+            else
+                pdb = this.protein.pdb;
+                gs = this.protein.gridSize;
+            end
             
             tic;
             for i = 1 : length(indices)
@@ -203,7 +206,7 @@ classdef RefLayers < handle
                     ub_all_fix_one = ub_all;
                     ub_all_fix_one(ind) = para_range(j);
                     
-                    fitFun = @(p) (RefLayers.calculateRefPartialPara(q_par, p, lb_all_fix_one, ub_all_fix_one, sigma_par, energy_par) - ref_par) ./ err_par;
+                    fitFun = @(p) (RefLayers.calculateRefPartialPara(q_par, p, lb_all_fix_one, ub_all_fix_one, sigma_par, energy_par, pdb, gs) - ref_par) ./ err_par;
                     
                     newsel = lb_all_fix_one ~= ub_all_fix_one;
                     lb_partial_fix_one = lb_all_fix_one(newsel);
@@ -319,9 +322,6 @@ classdef RefLayers < handle
             
             qc = this.getQc();
             
-%             r = (q - sqrt(q.^2 - ones(size(q)) * qc^2)) ./ (q + sqrt(q.^2 - ones(size(q)) * qc^2));
-%             R = r .* conj(r);
-            
             R = this.calculateFresnel(q, qc);
             
         end
@@ -343,8 +343,9 @@ classdef RefLayers < handle
             if isempty(this.protein) || this.density == 0
                 this.profile = this.calculateSmoothEdProfile(this.ed, this.thickness, this.sigma, 0);
             else
-                [ed_pro, thick_pro, z_origin] = this.getCompositeEdProfile();
-                this.profile = this.calculateSmoothEdProfile(ed_pro, thick_pro, this.sigma, z_origin);
+                [pro_ed, pro_thick, pro_area] = this.protein.getEdProfile(this.theta, this.phi);
+                [com_ed, com_thick, z_origin] = this.getCompositeEdProfile(this.ed, this.thickness, pro_ed, pro_thick, pro_area, this.density, this.insertion);
+                this.profile = this.calculateSmoothEdProfile(com_ed, com_thick, this.sigma, z_origin);
             end
             
         end
@@ -352,6 +353,8 @@ classdef RefLayers < handle
     end
     
     methods(Static)
+        
+        % ed profiles
         
         function profile = calculateSmoothEdProfile(ed, thickness, sigma, z_origin)
             
@@ -397,100 +400,94 @@ classdef RefLayers < handle
             
         end
         
-        function [ed, thick, z_origin] = getCompositeEdProfile(layer_ed, layer_thick, pro_ed, pro_thick, pro_area)
+        function [ed, thick, z_origin] = getCompositeEdProfile(layer_ed, layer_thick, pro_ed, pro_thick, pro_area, density, insertion)
             
-            if isempty(this.protein)
-                ed = this.ed;
-                thick = this.thickness;
-                z_origin = 0;
-            else
-                [pro_ed, pro_thick, pro_area] = this.protein.generateSingleEdProfile(this.theta, this.phi);
-                pro_top = this.insertion;
-                num_per_100nm2 = this.density;
-                
-                % top and bottom position of protein
-                pro_length = sum(pro_thick);
-                grid_n = length(pro_ed);
-                pro_bot = pro_top - pro_length;
-                
-                interface_z = cumsum([0, this.thickness( 2 : end - 1)]);
-                layer_top_z = [interface_z, Inf];
-                layer_bot_z = [-Inf, interface_z];
-                
-                % obtain the layers without intersection with the protein
-                sel_top = layer_bot_z >= pro_top | layer_top_z == Inf;
-                ed_top = this.ed(sel_top);
-                thick_top = this.thickness(sel_top);
-                
-                sel_bot = layer_top_z <= pro_bot | layer_bot_z == -Inf;
-                ed_bot = this.ed(sel_bot);
-                thick_bot = this.thickness(sel_bot);
-                
-                % find the layer that has the top/bottom edges of the protein
-                sel_pro_top = layer_top_z >= pro_top & layer_bot_z < pro_top;
-                sel_pro_bot = layer_top_z >= pro_bot & layer_bot_z < pro_bot;
-                
-                % obtain the top part of protein free part of the layer
-                % that contains the top of the protein, or the other way
-                thick_partial_top = layer_top_z(sel_pro_top) - pro_top;
-                if thick_partial_top ~= 0 && thick_partial_top ~= Inf
-                    ed_top = [this.ed(sel_pro_top), ed_top];
-                    thick_top = [thick_partial_top, thick_top];
-                end
-                
-                thick_partial_bot = pro_bot - layer_bot_z(sel_pro_bot);
-                if thick_partial_bot ~=0 && thick_partial_bot ~= Inf
-                    ed_bot = [ed_bot, this.ed(sel_pro_bot)];
-                    thick_bot = [thick_bot, thick_partial_bot];
-                end
-                
-                % find the interfaces that goes through the protein
-                through_z = interface_z(interface_z < pro_top & interface_z > pro_bot);
-                pro_n = length(pro_ed);
-                pro_grid_top_z = (1 : pro_n) * this.protein.gridSize - pro_length + this.insertion;
-                pro_grid_bot_z = pro_grid_top_z - this.protein.gridSize;
-                
-                % find the grids to be broken into two
-                sel_break = through_z' <= pro_grid_top_z & through_z' > pro_grid_bot_z;
-                [~, ind_2] = find(sel_break);
-                
-                sel_ed = sort([1 : grid_n, ind_2']);
-                pro_ed_new = pro_ed(sel_ed);
-                pro_area_new = pro_area(sel_ed);
-                pro_thick_new = pro_thick(sel_ed);
-                
-                for i = 1 : length(ind_2)
-                    pro_thick_new(ind_2(i) + i - 1) = through_z(i) - pro_grid_bot_z(ind_2(i));
-                    pro_thick_new(ind_2(i) + i ) = pro_grid_top_z(ind_2(i)) - through_z(i);
-                end
-                
-                sel_nonzero = pro_thick_new ~= 0;
-                pro_thick_new = pro_thick_new(sel_nonzero);
-                pro_ed_new = pro_ed_new(sel_nonzero);
-                pro_area_new = pro_area_new(sel_nonzero);
-                pro_grid_top_z_new = cumsum(pro_thick_new) - pro_length + this.insertion;
-                pro_grid_bot_z_new = pro_grid_top_z_new - pro_thick_new;
-                
-                % identify the layers that intersets with the protein and
-                % loop through them
-                sel_overlap = (layer_top_z >= pro_top & layer_bot_z < pro_top)...
-                    | (layer_top_z >= pro_bot & layer_bot_z < pro_bot)...
-                    | (layer_top_z < pro_top & layer_bot_z > pro_bot);
-                indices = find(sel_overlap);
-                composite_ed = zeros(size(pro_ed_new));
-                for i = 1 : length(indices)
-                    sel_between = pro_grid_bot_z_new >= layer_bot_z(indices(i)) & pro_grid_top_z_new <= layer_top_z(indices(i));
-                    area_frac = pro_area_new(sel_between) * num_per_100nm2 / 1e4;
-                    composite_ed(sel_between) = pro_ed_new(sel_between) .* area_frac + this.ed(indices(i)) * (1 - area_frac);
-                end
-                
-                ed = [ed_bot, composite_ed, ed_top];
-                thick = [thick_bot, pro_thick_new, thick_top];
-                z_origin = pro_length - this.insertion;
-                
+            gs = pro_thick(1);
+            pro_top = insertion;
+            
+            % top and bottom position of protein
+            pro_length = sum(pro_thick);
+            grid_n = length(pro_ed);
+            pro_bot = pro_top - pro_length;
+            
+            interface_z = cumsum([0, layer_thick( 2 : end - 1)]);
+            layer_top_z = [interface_z, Inf];
+            layer_bot_z = [-Inf, interface_z];
+            
+            % obtain the layers without intersection with the protein
+            sel_top = layer_bot_z >= pro_top | layer_top_z == Inf;
+            ed_top = layer_ed(sel_top);
+            thick_top = layer_thick(sel_top);
+            
+            sel_bot = layer_top_z <= pro_bot | layer_bot_z == -Inf;
+            ed_bot = layer_ed(sel_bot);
+            thick_bot = layer_thick(sel_bot);
+            
+            % find the layer that has the top/bottom edges of the protein
+            sel_pro_top = layer_top_z >= pro_top & layer_bot_z < pro_top;
+            sel_pro_bot = layer_top_z >= pro_bot & layer_bot_z < pro_bot;
+            
+            % obtain the top part of protein free part of the layer
+            % that contains the top of the protein, or the other way
+            thick_partial_top = layer_top_z(sel_pro_top) - pro_top;
+            if thick_partial_top ~= 0 && thick_partial_top ~= Inf
+                ed_top = [layer_ed(sel_pro_top), ed_top];
+                thick_top = [thick_partial_top, thick_top];
             end
             
+            thick_partial_bot = pro_bot - layer_bot_z(sel_pro_bot);
+            if thick_partial_bot ~=0 && thick_partial_bot ~= Inf
+                ed_bot = [ed_bot, layer_ed(sel_pro_bot)];
+                thick_bot = [thick_bot, thick_partial_bot];
+            end
+            
+            % find the interfaces that goes through the protein
+            through_z = interface_z(interface_z < pro_top & interface_z > pro_bot);
+            pro_n = length(pro_ed);
+            pro_grid_top_z = (1 : pro_n) * gs - pro_length + insertion;
+            pro_grid_bot_z = pro_grid_top_z - gs;
+            
+            % find the grids to be broken into two
+            sel_break = through_z' <= pro_grid_top_z & through_z' > pro_grid_bot_z;
+            [~, ind_2] = find(sel_break);
+            
+            sel_ed = sort([1 : grid_n, ind_2']);
+            pro_ed_new = pro_ed(sel_ed);
+            pro_area_new = pro_area(sel_ed);
+            pro_thick_new = pro_thick(sel_ed);
+            
+            for i = 1 : length(ind_2)
+                pro_thick_new(ind_2(i) + i - 1) = through_z(i) - pro_grid_bot_z(ind_2(i));
+                pro_thick_new(ind_2(i) + i ) = pro_grid_top_z(ind_2(i)) - through_z(i);
+            end
+            
+            sel_nonzero = pro_thick_new ~= 0;
+            pro_thick_new = pro_thick_new(sel_nonzero);
+            pro_ed_new = pro_ed_new(sel_nonzero);
+            pro_area_new = pro_area_new(sel_nonzero);
+            pro_grid_top_z_new = cumsum(pro_thick_new) - pro_length + insertion;
+            pro_grid_bot_z_new = pro_grid_top_z_new - pro_thick_new;
+            
+            % identify the layers that intersets with the protein and
+            % loop through them
+            sel_overlap = (layer_top_z >= pro_top & layer_bot_z < pro_top)...
+                | (layer_top_z >= pro_bot & layer_bot_z < pro_bot)...
+                | (layer_top_z < pro_top & layer_bot_z > pro_bot);
+            indices = find(sel_overlap);
+            composite_ed = zeros(size(pro_ed_new));
+            for i = 1 : length(indices)
+                sel_between = pro_grid_bot_z_new >= layer_bot_z(indices(i)) & pro_grid_top_z_new <= layer_top_z(indices(i));
+                area_frac = pro_area_new(sel_between) * density / 1e4;
+                composite_ed(sel_between) = pro_ed_new(sel_between) .* area_frac + layer_ed(indices(i)) * (1 - area_frac);
+            end
+            
+            ed = [ed_bot, composite_ed, ed_top];
+            thick = [thick_bot, pro_thick_new, thick_top];
+            z_origin = pro_length - insertion;
+            
         end
+        
+        % reflectivity calculation
         
         function ref = parratt(ed, thickness, q, qc)
             
@@ -518,44 +515,6 @@ classdef RefLayers < handle
             
         end
         
-        function q = defaultQ()
-            
-            q = 0.026 : 0.005 : 0.7;
-            
-        end
-        
-        function wl = calculateWavelength(energy)
-            
-            c = 299792458;
-            h = 6.62607004e-34;
-            ev2j = 1.60218e-19;
-            
-            wl = h * c / (energy * 1000 * ev2j) * 1e10;
-            
-        end
-        
-        function qc = calculateQc(bufferEd, wavelength)
-            
-            ro = 2.818*10^-5;
-            k = 2 * pi / wavelength;
-            delta = 2 * pi * ro * bufferEd / k^2;
-            qc = 2 * k * sqrt( 2 * delta );
-            
-        end
-        
-        function names = generateParaNames(n_layer)
-            
-            names = cell(1, n_layer * 2 - 1);
-            names{1} = 'Qz-Offset';
-            names{2} = 'Top-ED';
-            names{n_layer + 1} = 'Bottom-ED';
-            for i = 1 : n_layer - 2
-                names{n_layer + 1 - i} = ['Layer-', num2str(i), '-ED'];
-                names{2 * n_layer - i} = ['Layer-', num2str(i), '-Thkns'];
-            end
-            
-        end
-        
         function f = calculateFresnel(q, qc)
             
             r = (q - sqrt(q.^2 - ones(size(q)) * qc^2)) ./ (q + sqrt(q.^2 - ones(size(q)) * qc^2));
@@ -563,24 +522,44 @@ classdef RefLayers < handle
             
         end
         
-        function ref = calculateRefPartialPara(q, para_partial, lb_all, ub_all, sigma, energy)
+        function ref = calculateRefPartialPara(q, para_partial, lb_all, ub_all, sigma, energy, pdb, gs)
             
             para_full = lb_all;
             sel = lb_all == ub_all;
             para_full(~sel) = para_partial;
             
-            n_layer = (length(para_full) + 1) / 2;
             qoff = para_full(1);
-            thick = [Inf, para_full(end : -1 : end - n_layer + 3), Inf];
-            ED = fliplr(para_full(2 : n_layer + 1));
             
-            pro = RefLayers.calculateSmoothEdProfile(ED, thick, sigma);
+            if isempty(pdb)
+                n_layer = (length(para_full) + 1) / 2;
+                thick_coarse = [Inf, para_full(2 * n_layer - 1 : -1 : n_layer + 2), Inf];
+                ed_coarse = para_full(n_layer + 1 : -1 : 2);
+                z_origin = 0;
+            else
+                n_layer = (length(para_full) - 3) / 2;
+                
+                layer_thick = [Inf, para_full(2 * n_layer - 1 : -1 : n_layer + 2), Inf];
+                layer_ed = para_full(n_layer + 1 : -1 : 2);
+                
+                pro_phi = para_full(end);
+                pro_theta = para_full(end - 1);
+                pro_insertion = para_full(end - 2);
+                pro_density = para_full(end - 3);
+                [pro_ed, pro_thick, pro_area] = RefProtein.calculateEdProfile(pdb.x, pdb.y, pdb.z, pdb.radius, pdb.electron, pro_theta, pro_phi, gs);
+                
+                [ed_coarse, thick_coarse, z_origin] = RefLayers.getCompositeEdProfile(layer_ed, layer_thick, pro_ed, pro_thick, pro_area, pro_density, pro_insertion);
+                
+            end
+               
+            prof = RefLayers.calculateSmoothEdProfile(ed_coarse, thick_coarse, sigma, z_origin);
             wl = RefLayers.calculateWavelength(energy);
-            qc = RefLayers.calculateQc(ED(1), wl);
+            qc = RefLayers.calculateQc(ed_coarse(1), wl);
             
-            ref = RefLayers.parratt(pro.ed, pro.thickness, q + qoff, qc);
+            ref = RefLayers.parratt(prof.ed, prof.thickness, q + qoff, qc);
             
         end
+        
+        % utility
         
         function y = bellCurve(x, paras)
             
@@ -615,6 +594,53 @@ classdef RefLayers < handle
             result.centerIndices = centerIndices;
             result.centerValues = centerValues;
             result.confidenceWindow = confidenceWindow;
+            
+        end
+        
+        function wl = calculateWavelength(energy)
+            
+            c = 299792458;
+            h = 6.62607004e-34;
+            ev2j = 1.60218e-19;
+            
+            wl = h * c / (energy * 1000 * ev2j) * 1e10;
+            
+        end
+        
+        function qc = calculateQc(bufferEd, wavelength)
+            
+            ro = 2.818*10^-5;
+            k = 2 * pi / wavelength;
+            delta = 2 * pi * ro * bufferEd / k^2;
+            qc = 2 * k * sqrt( 2 * delta );
+            
+        end
+        
+        function names = getParaNames(n_layer, pro_flag)
+            
+            if pro_flag
+                names = cell(1, n_layer * 2 + 3);
+                names{end} = 'Phi';
+                names{end - 1} = 'Theta';
+                names{end - 2} = 'Insertion';
+                names{end - 3} = 'Density';
+            else
+                names = cell(1, n_layer * 2 - 1);
+            end
+            
+            names{1} = 'Qz-Offset';
+            names{2} = 'Top-ED';
+            names{n_layer + 1} = 'Bottom-ED';
+            for i = 1 : n_layer - 2
+                names{n_layer + 1 - i} = ['Layer-', num2str(i), '-ED'];
+                names{2 * n_layer - i} = ['Layer-', num2str(i), '-Thkns'];
+            end
+            
+        end
+        
+        function q = defaultQ()
+            
+            q = 0.026 : 0.005 : 0.7;
             
         end
         
