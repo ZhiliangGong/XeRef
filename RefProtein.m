@@ -137,6 +137,9 @@ classdef RefProtein < handle
         
         function [x, y, z] = rotateThetaPhi(x, y, z, theta, phi)
             
+            theta = theta * pi / 180;
+            phi = phi * pi / 180;
+            
             positions = [1, 0, 0; 0, cos(theta), -sin(theta); 0, sin(theta), cos(theta)]...
                 * [cos(phi), -sin(phi), 0; sin(phi), cos(phi), 0; 0, 0, 1]...
                 * [x; y; z];
@@ -150,6 +153,9 @@ classdef RefProtein < handle
         function [ed, thickness, area] = calculateEdProfile(x, y, z, radius, electron, theta, phi, gs)
             
             N = length(x);
+            
+            theta = theta * pi / 180;
+            phi = phi * pi / 180;
             
             positions = [1, 0, 0; 0, cos(theta), -sin(theta); 0, sin(theta), cos(theta)]...
                 * [cos(phi), -sin(phi), 0; sin(phi), cos(phi), 0; 0, 0, 1]...

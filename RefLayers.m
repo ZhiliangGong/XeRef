@@ -2,6 +2,7 @@ classdef RefLayers < handle
     
     properties
         
+        qoff = 0
         ed
         thickness
         
@@ -39,6 +40,7 @@ classdef RefLayers < handle
         
         function updateModel(this, paras)
             
+            this.qoff = paras.p0(1);
             this.ed = paras.ed;
             this.thickness = paras.thickness;
             
@@ -66,7 +68,7 @@ classdef RefLayers < handle
             
             qc = this.getQc();
             
-            ref = this.parratt(this.profile.ed, this.profile.thickness, q, qc);
+            ref = this.parratt(this.profile.ed, this.profile.thickness, q + this.qoff, qc);
             
         end
         
@@ -77,8 +79,8 @@ classdef RefLayers < handle
             end
             
             dat.q = q;
-            dat.ref = this.getRef(q);
-            dat.fnr = dat.ref ./ this.getFresnel(q);
+            dat.ref = this.getRef(q + this.qoff);
+            dat.fnr = dat.ref ./ this.getFresnel(q + this.qoff);
             
         end
         
@@ -89,7 +91,7 @@ classdef RefLayers < handle
             sel = lb_all ~= ub_all;
             if sum(sel) > 0
                 this.fitAll(refData, para_all, lb_all, ub_all);
-                this.fitParaOneByOne(refData, para_all, lb_all, ub_all, n_steps);
+%                 this.fitParaOneByOne(refData, para_all, lb_all, ub_all, n_steps);
             end
             
         end
@@ -109,31 +111,30 @@ classdef RefLayers < handle
         
         function fitAll(this, refData, para_all, lb_all, ub_all)
             
-            if isempty(this.protein)
-                n_layer = (length(para_all) + 1) / 2;
-            else
+            pro_flag = ~ isempty(this.protein);
+            
+            if pro_flag
                 n_layer = (length(para_all) - 3) / 2;
+                pdb = this.protein.pdb;
+                gs = this.protein.gridSize;
+            else
+                n_layer = (length(para_all) + 1) / 2;
+                pdb = [];
+                gs = [];
             end
             
-            sel = lb_all == ub_all;
-            para_partial = para_all(~sel);
-            lb_partial = lb_all(~sel);
-            ub_partial = ub_all(~sel);
+            sel = lb_all ~= ub_all;
+            para_partial = para_all(sel);
+            lb_partial = lb_all(sel);
+            ub_partial = ub_all(sel);
             
-            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'iter');
+            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1000, 'MaxIter', 1000,...
+                'Algorithm','trust-region-reflective', 'Display', 'iter', 'UseParallel', true);
             
             % fit all varying parameters at once
             
             sigma_temp = this.sigma;
             energy_temp = this.energy;
-            
-            if ~ isempty(this.protein)
-                pdb = this.protein.pdb;
-                gs = this.protein.gridSize;
-            else
-                pdb = [];
-                gs = [];
-            end
             
             fitAllFun = @(p) (RefLayers.calculateRefPartialPara(refData.q, p, lb_all, ub_all, sigma_temp, energy_temp, pdb, gs) - refData.ref) ./ refData.err;
             [para_fitted, chi2] = lsqnonlin(fitAllFun, para_partial, lb_partial, ub_partial, options);
@@ -146,12 +147,12 @@ classdef RefLayers < handle
             
             this.fits.all.para_names_all = this.getParaNames(n_layer, pro_flag);
             
-            this.fits.all.para_names_fitted = this.fits.all.para_names_all(~sel);
+            this.fits.all.para_names_fitted = this.fits.all.para_names_all(sel);
             para_all = lb_all;
-            para_all(~sel) = para_fitted;
+            para_all(sel) = para_fitted;
             this.fits.all.para_all = para_all;
             this.fits.all.para_fitted = para_fitted;
-            this.fits.all.fitted = ~sel;
+            this.fits.all.fitted = sel;
             this.fits.all.chi2 = chi2;
             this.fits.all.q = refData.q;
             this.fits.all.ref = refData.ref;
@@ -171,7 +172,7 @@ classdef RefLayers < handle
             M = length(para_partial);
             this.fits.one = cell(1, M);
             
-            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'iter');
+            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1000, 'MaxIter', 1000, 'Display', 'none', 'UseParallel', true);
             
             % prepare for parfor loop
             q_par = refData.q;
@@ -241,7 +242,7 @@ classdef RefLayers < handle
             sel = lb_all ~= ub_all;
             indices = find(sel);
             num = length(indices);
-            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e5, 'Display', 'none');
+            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1000, 'MaxIter', 1000, 'Display', 'none', 'UseParallel', true);
             
             switch num
                 case 0
@@ -253,15 +254,25 @@ classdef RefLayers < handle
                 otherwise
                     results = cell(num, num);
                     tic;
+                    
+                    if isempty(this.protein)
+                        pdb = [];
+                        gs = [];
+                    else
+                        pdb = this.protein.pdb;
+                        gs = this.protein.gridSize;
+                    end
+                    
                     for i = 1 : num - 1
                         for j = i + 1 : num
+                            
                             para_range_1 = linspace(lb_all(indices(i)), ub_all(indices(i)), n_steps);
                             para_range_2 = linspace(lb_all(indices(j)), ub_all(indices(j)), n_steps);
                             
                             result.para_range_1 = para_range_1;
                             result.para_range_2 = para_range_2;
                             result.chi2 = zeros(n_steps, n_steps);
-                            result.para_names = this.fits.all.para_names_all([i, j]);
+                            result.para_names = this.fits.all.para_names_all(indices([i, j]));
                             
                             % prepare for parfor loop
                             q_par = refData.q;
@@ -283,7 +294,7 @@ classdef RefLayers < handle
                                     ub_all_fix_two(indices_par(i)) = para_range_1(m);
                                     ub_all_fix_two(indices_par(j)) = para_range_2_par(n);
                                     
-                                    fitFun = @(p) (RefLayers.calculateRefPartialPara(q_par, p, lb_all_fix_two, ub_all_fix_two, sigma_par, energy_par) - ref_par) ./ err_par;
+                                    fitFun = @(p) (RefLayers.calculateRefPartialPara(q_par, p, lb_all_fix_two, ub_all_fix_two, sigma_par, energy_par, pdb, gs) - ref_par) ./ err_par;
                                     
                                     newsel = lb_all_fix_two == ub_all_fix_two;
                                     lb_partial_fix_two = lb_all_fix_two(~newsel);
@@ -295,6 +306,10 @@ classdef RefLayers < handle
                                     
                                 end
                             end
+                            
+%                             if strcmpi(result.para_names{1}, 'Theta') && strcmpi(result.para_names{2}, 'Phi')
+%                                 
+%                             end
                             
                             lk = chi2_mat;
                             lk = exp(-(lk-min(lk(:)))/2);
@@ -640,7 +655,17 @@ classdef RefLayers < handle
         
         function q = defaultQ()
             
-            q = 0.026 : 0.005 : 0.7;
+            q = 0.03 : 0.005 : 0.7;
+            
+        end
+        
+        function stepSizes = getStepSizes(n_layer, pro_flag)
+            
+            if pro_flag
+                stepSizes = [1e-6, ones(1, n_layer) * 1e-4, ones(1, n_layer - 2) * 1e-2, 1e-2, 1e-2, 1, 1];
+            else
+                stepSizes = [1e-6, ones(1, n_layer) * 1e-4, ones(1, n_layer - 2) * 1e-3];
+            end
             
         end
         

@@ -312,8 +312,13 @@ classdef XeRef < handle
                             this.model(state, trigger);
                             this.view(state, trigger);
                         case 'load-pdb'
-                            this.model(state, trigger);
-                            this.view(state, trigger);
+                            if ~isempty(varargin) > 0
+                                pdbfiles = varargin{1};
+                            else
+                                pdbfiles = [];
+                            end
+                            this.model(state, trigger, pdbfiles);
+                            this.view(state, trigger); 
                         case 'choose-pdb'
                             this.model(state, trigger);
                             this.view(state, trigger);
@@ -428,8 +433,22 @@ classdef XeRef < handle
                         viewUpdate = true;
                         modelUpdate = true;
                     case 4
-                        table.data{ind1, 1} = table.Data{ind1, 3};
-                        table.data{ind1, 2} = table.Data{ind1, 3};
+                        if table.Data{ind1, ind2}
+                            table.Data{ind1, 1} = table.Data{ind1, 3};
+                            table.Data{ind1, 2} = table.Data{ind1, 3};
+                        else
+                            switch ind1
+                                case 1
+                                    table.Data{ind1, 1} = -0.001;
+                                    table.Data{ind1, 2} = 0.001;
+                                case 2
+                                    table.Data{ind1, ind2} = true;
+                                    disp('Does not support a different top phase yet.');
+                                otherwise
+                                    table.Data{ind1, 1} = 0.5 * table.Data{ind1, ind2};
+                                    table.Data{ind1, 2} = 2 * table.Data{ind1, ind2};
+                            end
+                        end
                     case 5
                         if isfield(this.layers.fits, 'one') && this.layers.fits.all.fitted(ind1)
                             sel = cell2mat(table.Data(:, end));
@@ -499,7 +518,8 @@ classdef XeRef < handle
                         case 'load-data'
                             loadNewData();
                         case 'load-pdb'
-                            loadNewPdb();
+                            pdbfiles = varargin{1};
+                            loadNewPdb(pdbfiles);
                         case 'layer-table'
                             dat = varargin{1};
                             this.layers = RefLayers(10, dat.ed, dat.thickness);
@@ -561,7 +581,7 @@ classdef XeRef < handle
             
             function loadNewPdb(files)
                 
-                if nargin == 0
+                if nargin == 0 || isempty(files)
                     [files, path] = uigetfile('*.pdb', 'Select the pdb files.', 'MultiSelect', 'on');
                     if ~isnumeric(files)
                         if isa(files, 'char')
@@ -571,6 +591,8 @@ classdef XeRef < handle
                             files{i} = fullfile(path, files{i});
                         end
                     end
+                elseif isa(files, 'char')
+                    files = {files};
                 end
                 
                 this.pdbFiles = [this.pdbFiles, files];
@@ -862,7 +884,7 @@ classdef XeRef < handle
                         text_1{i+4} = [dat.para_names_fitted{i}, ': ', num2str(dat.para_fitted(i))];
                     end
                     text = [text; text_1];
-                    if isfield(this.layers.fits, 'one')
+                    if isfield(this.layers.fits, 'one') && ~ isempty(this.layers.fits.one)
                         dat = this.layers.fits.one;
                         text_2 = cell(n+3, 1);
                         text_2{1} = '';
