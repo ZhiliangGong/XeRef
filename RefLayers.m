@@ -135,7 +135,7 @@ classdef RefLayers < handle
             lb_partial = lb_all(sel);
             ub_partial = ub_all(sel);
             
-            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1000, 'MaxIter', 1000,...
+            options = optimoptions('lsqnonlin', 'MaxFunEvals', 1e25, 'MaxIter', 1e6,...
                 'Algorithm','trust-region-reflective', 'Display', 'iter', 'UseParallel', true);
             
             % fit all varying parameters at once
