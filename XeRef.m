@@ -275,6 +275,7 @@ classdef XeRef < handle
                 this.gui.showEd.Callback = @(varargin) this.control('show-ed');
                 
                 % table controls
+                this.gui.basicInfoTable.CellEditCallback = @(source, eventdata, varargin) this.control('basic-info', eventdata);
                 this.gui.toggleProtein.Callback = @(varargin) this.control('toggle-protein');
                 this.gui.addLayer.Callback = @(varargin) this.control('add-layer');
                 this.gui.deleteLayer.Callback = @(varargin) this.control('delete-layers');
@@ -336,8 +337,17 @@ classdef XeRef < handle
                                 this.model(state, trigger, paras);
                             end
                             if viewUpate
-                                this.view(state, trigger);
+                                this.view(state, trigger, paras.theta, paras.phi);
                             end
+                        case 'basic-info'
+                            eventdata = varargin{1};
+                            needUpdate = handleBasicInfoEdit(eventdata);
+                            if needUpdate
+                                t = readBasicTableData();
+                                this.model(state, trigger, t);
+                                this.view(state, trigger, t);
+                            end
+                            
                         case 'fit'
                             refData = this.data{this.gui.dataFiles.Value(1)};
                             pData = readParameterTable();
@@ -445,8 +455,8 @@ classdef XeRef < handle
                                     table.Data{ind1, ind2} = true;
                                     disp('Does not support a different top phase yet.');
                                 otherwise
-                                    table.Data{ind1, 1} = 0.5 * table.Data{ind1, ind2};
-                                    table.Data{ind1, 2} = 2 * table.Data{ind1, ind2};
+                                    table.Data{ind1, 1} = 0.5 * table.Data{ind1, 3};
+                                    table.Data{ind1, 2} = 2 * table.Data{ind1, 3};
                             end
                         end
                     case 5
@@ -495,6 +505,27 @@ classdef XeRef < handle
                 
             end
             
+            function needUpdate = handleBasicInfoEdit(eventdata)
+                
+                needUpdate = false;
+                
+                ind1 = eventdata.Indices(1);
+                
+                switch ind1
+                    case 1
+                    case 2
+                        needUpdate = true;
+                    case 3
+                end
+                
+            end
+            
+            function t = readBasicTableData()
+                
+                t = cell2mat(this.gui.basicInfoTable.Data)';
+                
+            end
+            
         end
         
         function model(this, state, trigger, varargin)
@@ -526,6 +557,9 @@ classdef XeRef < handle
                         case 'parameter-table'
                             paras = varargin{1};
                             this.layers.updateModel(paras);
+                        case 'basic-info'
+                            tdata = varargin{1};
+                            this.layers.updateRoughness(tdata(2));
                         case 'fit'
                             refData = varargin{1};
                             pData = varargin{2};
@@ -627,6 +661,9 @@ classdef XeRef < handle
                             displayPdbFiles();
                         case {'choose-data', 'toggle-fresnel', 'toggle-cal', 'toggle-fit'}
                             upperPlot();
+                        case 'basic-info'
+                            upperPlot();
+                            lowerPlot();
                         case 'layer-table'
                             plotEdProfile(this.gui.ax2);
                             upperPlot();
@@ -644,11 +681,14 @@ classdef XeRef < handle
                         case 'update-starts-follow-up'
                             if this.gui.showCal.Value
                                 upperPlot();
-                                plotEdProfile(this.gui.ax2);
+                                lowerPlot();
                             end
                         case 'parameter-table'
+                            theta = varargin{1};
+                            phi = varargin{2};
                             upperPlot();
-                            plotEdProfile(this.gui.ax2);
+                            lowerPlot(theta, phi);
+%                             plotEdProfile(this.gui.ax2);
                         case 'show-protein'
                             if ~isempty(this.protein)
                                 this.gui.showEd.Value = ~ this.gui.showProtein.Value;
@@ -743,10 +783,11 @@ classdef XeRef < handle
                         if nargin == 2
                             theta_local = varargin{1};
                             phi_local = varargin{2};
-                            plotProtein(ax, theta_local, phi_local);
                         else
-                            plotProtein(ax, 0, 0);
+                            theta_local = this.gui.parametersTable.Data{end-1, 3};
+                            phi_local = this.gui.parametersTable.Data{end, 3};
                         end
+                        plotProtein(ax, theta_local, phi_local);
                 end
                 
             end
@@ -859,45 +900,42 @@ classdef XeRef < handle
             
             function plotProtein(ax, theta, phi)
                 
+                sel_emphasize = [692, 1180, 2175];
                 if ~isempty(this.protein)
-                    if nargin == 1
-                        theta = 0;
-                        phi = 0;
-                    end
-                    this.protein.visualize(ax, theta, phi);
+                    this.protein.visualize(ax, theta, phi, sel_emphasize);
                 end
                 
             end
             
             function recordFittingResults()
                 
-                text = {};
-                if isfield(this.layers.fits, 'all')
-                    dat = this.layers.fits.all;
-                    n = length(dat.para_fitted);
-                    text_1 = cell(n+4, 1);
-                    text_1{1} = this.textDivider();
-                    text_1{2} = 'Global fit result: ';
-                    text_1{3} = '';
-                    text_1{4} = ['Chi^2: ', num2str(dat.chi2)];
-                    for i = 1 : n
-                        text_1{i+4} = [dat.para_names_fitted{i}, ': ', num2str(dat.para_fitted(i))];
-                    end
-                    text = [text; text_1];
-                    if isfield(this.layers.fits, 'one') && ~ isempty(this.layers.fits.one)
-                        dat = this.layers.fits.one;
-                        text_2 = cell(n+3, 1);
-                        text_2{1} = '';
-                        text_2{2} = 'Single parameter brute force fit:';
-                        text_2{3} = '';
-                        for i = 1 : n
-                            text_2{i+3} = [dat{i}.para_name, ': ', num2str(dat{i}.gauss.para(2)), ', standard deviation: ', num2str(dat{i}.gauss.para(3))];
-                        end
-                        text = [text; text_2];
-                    end
-                end
-                
-                this.gui.output.String = [text; this.gui.output.String];
+%                 text = {};
+%                 if isfield(this.layers.fits, 'all')
+%                     dat = this.layers.fits.all;
+%                     n = length(dat.para_fitted);
+%                     text_1 = cell(n+4, 1);
+%                     text_1{1} = this.textDivider();
+%                     text_1{2} = 'Global fit result: ';
+%                     text_1{3} = '';
+%                     text_1{4} = ['Chi^2: ', num2str(dat.chi2)];
+%                     for i = 1 : n
+%                         text_1{i+4} = [dat.para_names_fitted{i}, ': ', num2str(dat.para_fitted(i))];
+%                     end
+%                     text = [text; text_1];
+%                     if isfield(this.layers.fits, 'one') && ~ isempty(this.layers.fits.one)
+%                         dat = this.layers.fits.one;
+%                         text_2 = cell(n+3, 1);
+%                         text_2{1} = '';
+%                         text_2{2} = 'Single parameter brute force fit:';
+%                         text_2{3} = '';
+%                         for i = 1 : n
+%                             text_2{i+3} = [dat{i}.para_name, ': ', num2str(dat{i}.gauss.para(2)), ', standard deviation: ', num2str(dat{i}.gauss.para(3))];
+%                         end
+%                         text = [text; text_2];
+%                     end
+%                 end
+%                 
+%                 this.gui.output.String = [text; this.gui.output.String];
                 
             end
             

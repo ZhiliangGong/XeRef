@@ -58,6 +58,13 @@ classdef RefLayers < handle
             
         end
         
+        function updateRoughness(this, roughness)
+            
+            this.sigma = roughness;
+            this.getSmoothEdProfile();
+            
+        end
+        
         % calculation
         
         function ref = getRef(this, q)

@@ -77,25 +77,33 @@ classdef RefProtein < handle
             
         end
         
-        function visualize(this, ax, theta, phi)
+        function visualize(this, ax, theta, phi, sel_emphasize)
             
-            if nargin == 2
-                theta = 0;
-                phi = 0;
-            end
-            
-            if nargin == 1
+            if isempty(ax)
                 ax = gca;
             end
             
+            if isempty(theta)
+                theta = 0;
+            end
+            
+            if isempty(phi)
+                phi = 0;
+            end
+            
             sel = this.pdb.atoms == 'C';
-%             xdata = this.pdb.x(sel);
-%             ydata = this.pdb.y(sel);
-%             zdata = this.pdb.z(sel);
             
             [xdata, ydata, zdata] = this.rotateThetaPhi(this.pdb.x(sel), this.pdb.y(sel), this.pdb.z(sel), theta, phi);
             
-            plot3(ax, xdata, ydata, zdata, '-o', 'linewidth', 2, 'MarkerFaceColor', 'cyan');
+            plot3(ax, xdata, ydata, zdata, '.', 'linewidth', 2, 'MarkerFaceColor', [1 1 1] * 0.5, 'color', [1 1 1] * 0.5);
+            
+            if ~ isempty(sel_emphasize)
+                [xdata, ydata, zdata] = this.rotateThetaPhi(this.pdb.x(sel_emphasize), this.pdb.y(sel_emphasize), this.pdb.z(sel_emphasize), theta, phi);
+                hold(ax, 'on');
+                plot3(ax, xdata, ydata, zdata, 's', 'linewidth', 2, 'MarkerFaceColor', 'm', 'color', 'r', 'markersize', 8);
+                hold(ax, 'off');
+            end
+            
             xlabel('$$ y (\AA) $$', 'fontsize', 14, 'interpreter', 'latex');
             ylabel('$$ x (\AA) $$', 'fontsize', 14, 'interpreter', 'latex');
             zlabel('$$ z (\AA) $$', 'fontsize', 14, 'interpreter', 'latex');
