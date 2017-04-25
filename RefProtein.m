@@ -20,7 +20,7 @@ classdef RefProtein < handle
             
             this.file = file;
             text = fileread(file);
-            this.pdb = processPdbFile(text);
+            this.pdb = this.readPdbFile(text);
             
             % get the mass and electrons of each atom as a vector
             n = length(this.pdb.x);
@@ -77,6 +77,35 @@ classdef RefProtein < handle
             
         end
         
+        function d = dimension(this, theta, phi)
+            
+            if nargin == 1
+                d.x = range(this.pdb.x);
+                d.y = range(this.pdb.y);
+                d.z = range(this.pdb.z);
+            else
+               [x, y, z] = this.rotateThetaPhi(this.pdb.x, this.pdb.y, this.pdb.z, theta, phi);
+               d.x = range(x);
+               d.y = range(y);
+               d.z = range(z);
+            end
+            
+        end
+        
+        function h = height(this, theta, phi)
+            
+            if nargin == 1
+                theta = 0;
+                phi = 0;
+            end
+            
+            d = this.dimension(theta, phi);
+            h = d.z;
+            
+        end
+        
+        % plot
+        
         function visualize(this, ax, theta, phi, sel_emphasize)
             
             if isempty(ax)
@@ -107,6 +136,61 @@ classdef RefProtein < handle
             xlabel('$$ y (\AA) $$', 'fontsize', 14, 'interpreter', 'latex');
             ylabel('$$ x (\AA) $$', 'fontsize', 14, 'interpreter', 'latex');
             zlabel('$$ z (\AA) $$', 'fontsize', 14, 'interpreter', 'latex');
+            
+        end
+        
+        function contourHeight(this)
+            
+            this.mapHeight([], [], [], 'contour');
+            
+        end
+        
+        function d3Height(this)
+            
+            this.mapHeight();
+            
+        end
+        
+        function ax = mapHeight(this, theta, phi, ax, type)
+            
+            if nargin == 1 || isempty(theta) || isempty(phi)
+                theta = 0 : 1 : 180;
+                phi = 0 : 1 : 359;
+            end
+            
+            if nargin < 4 || isempty(ax)
+                figure;
+                ax = gca;
+            end
+            
+            if nargin < 5 || isempty(type)
+                type = 'surf';
+            end
+            
+            [Phi, Theta] = meshgrid(phi, theta);
+            m = length(theta);
+            n = length(phi);
+            heights = zeros(m, n);
+            
+            for i = 1 : m
+                for j = 1 : n
+                    heights(i, j) = this.height(theta(i), phi(j));
+                end
+            end
+            
+            switch type
+                case 'surf'
+                    surf(ax, Phi, Theta, heights);
+                    xlabel(ax, '\phi (deg.)', 'fontsize', 16);
+                    ylabel(ax, '\theta (deg.)', 'fontsize', 16);
+                    zlabel(ax, 'Height (\AA)', 'fontsize', 16, 'interpreter', 'latex');
+                    set(ax, 'fontsize', 14, 'ylim', [0 180], 'ytick', (0 : 60 : 180), 'xlim', [0 360], 'xtick', (0 : 60 : 360));
+                case 'contour'
+                    contourf(ax, Phi, Theta, heights);
+                    xlabel(ax, '\phi (deg.)', 'fontsize', 16);
+                    ylabel(ax, '\theta (deg.)', 'fontsize', 16);
+                    set(ax, 'fontsize', 14, 'ylim', [0 180], 'ytick', (0 : 60 : 180), 'xlim', [0 360], 'xtick', (0 : 60 : 360));
+            end
             
         end
         
@@ -242,6 +326,30 @@ classdef RefProtein < handle
             sel_ed = ed > 0;
             ed = ed(sel_ed);
             area = area(sel_ed);
+            
+        end
+        
+        function pdb = readPdbFile(text)
+            
+            raw = textscan(text, '%s %d %s %*s %*s %d %f %f %f %*f %*f %*s', 'HeaderLines', 1);
+            
+            labels = raw{1};
+            anisous = raw{2};
+            
+            selects = (strcmpi('atom', labels) | strcmpi('hetatm', labels)) & anisous;
+            pdb.resid = raw{4}(selects)';
+            pdb.x = raw{5}(selects)';
+            pdb.y = raw{6}(selects)';
+            pdb.z = raw{7}(selects)';
+            
+            atomNames = raw{3}(selects)';
+            atoms = repmat(' ', 1, length(atomNames));
+            
+            for i = 1 : length(atoms)
+                atoms(i) = atomNames{i}(1);
+            end
+            
+            pdb.atoms = atoms;
             
         end
         

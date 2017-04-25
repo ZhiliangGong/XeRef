@@ -116,6 +116,19 @@ classdef RefLayers < handle
             
         end
         
+        function fitAngleGrid(this, refData, para_all, lb_all, ub_all, n_steps)
+            
+            if ~ isempty(this.protein) && sum(lb_all(end-1:end) == ub_all(end-1:end)) == 0
+                ind1 = length(para_all) - 1;
+                ind2 = ind1 + 1;
+                if isempty(this.fits)
+                    this.fitAll(refData, para_all, lb_all, ub_all);
+                end
+                this.fits.angles = this.fitPair(refData.q, refData.ref, refData.err, this.sigma, this.energy, this.protein.pdb, this.protein.gridSize, para_all, lb_all, ub_all, ind1, ind2, n_steps);
+            end
+            
+        end
+        
         function fitAll(this, refData, para_all, lb_all, ub_all)
             
             pro_flag = ~ isempty(this.protein);
@@ -314,10 +327,6 @@ classdef RefLayers < handle
                                 end
                             end
                             
-%                             if strcmpi(result.para_names{1}, 'Theta') && strcmpi(result.para_names{2}, 'Phi')
-%                                 
-%                             end
-                            
                             lk = chi2_mat;
                             lk = exp(-(lk-min(lk(:)))/2);
                             result.likelihood = lk/sum(lk(:));
@@ -335,6 +344,57 @@ classdef RefLayers < handle
         end
         
         % utility
+        
+        function result = fitPair(this, q, ref, err, sigma, energy, pdb, gs, para_all, lb_all, ub_all, ind1, ind2, n_steps)
+            
+            if ind1 == ind2
+                error('the indices of the parameter pair must not be the same.');
+            end
+            
+            para_range_1 = linspace(lb_all(ind1), ub_all(ind1), n_steps);
+            para_range_2 = linspace(lb_all(ind2), ub_all(ind2), n_steps);
+            
+            result.para_range_1 = para_range_1;
+            result.para_range_2 = para_range_2;
+            result.chi2 = zeros(n_steps, n_steps);
+            result.para_names = this.fits.all.para_names_all([ind1, ind2]);
+            
+            % prepare for parfor loop
+            chi2_mat = zeros(n_steps, n_steps);
+            
+            options = this.options();
+            
+            parfor m = 1 : n_steps
+                para_range_2_par = para_range_2;
+                para_all_par = para_all;
+                for n = 1 : n_steps
+                    lb_all_fix_two = lb_all;
+                    lb_all_fix_two(ind1) = para_range_1(m);
+                    lb_all_fix_two(ind2) = para_range_2_par(n);
+                    ub_all_fix_two = ub_all;
+                    ub_all_fix_two(ind1) = para_range_1(m);
+                    ub_all_fix_two(ind2) = para_range_2_par(n);
+                    
+                    fitFun = @(p) (RefLayers.calculateRefPartialPara(q, p, lb_all_fix_two, ub_all_fix_two, sigma, energy, pdb, gs) - ref) ./ err;
+                    
+                    newsel = lb_all_fix_two == ub_all_fix_two;
+                    lb_partial_fix_two = lb_all_fix_two(~newsel);
+                    ub_partial_fix_two = ub_all_fix_two(~newsel);
+                    para_partial_fix_two = para_all_par(~newsel);
+                    [~, chi2] = lsqnonlin(fitFun, para_partial_fix_two, lb_partial_fix_two, ub_partial_fix_two, options);
+                    
+                    chi2_mat(m, n) = chi2;
+                    
+                end
+            end
+            
+            lk = chi2_mat;
+            lk = exp(-(lk-min(lk(:)))/2);
+            result.likelihood = lk/sum(lk(:));
+            result.chi2 = chi2_mat;
+            result.confidence = this.confidenceContour(para_range_1, para_range_2, result.likelihood, 0.95);
+            
+        end
         
         function R = getFresnel(this, q)
             
@@ -673,6 +733,14 @@ classdef RefLayers < handle
             else
                 stepSizes = [1e-6, ones(1, n_layer) * 1e-4, ones(1, n_layer - 2) * 1e-3];
             end
+            
+        end
+        
+        % constants
+        
+        function o = options()
+            
+            o = optimoptions('lsqnonlin', 'MaxFunEvals', 1000, 'MaxIter', 1000, 'Display', 'none', 'UseParallel', true);
             
         end
         

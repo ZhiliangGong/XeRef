@@ -164,9 +164,9 @@ classdef XeRef < handle
 %                     tableData = {-0.01, 0.01, 0, false, false; 0, 0, 0, true, false; 0.2, 0.3, 0.26, false, false;...
 %                         0.4, 0.5, 0.44, false, false; 0.335, 0.335, 0.335, true, false; 8, 16, 12, false, false;...
 %                         6, 14, 10, false, false};
-                    tableData = {-5e-4, -4e-4, -6e-4, false, false; 0, 0, 0, true, false; 0.236, 0.242, 0.24, false, false;...
-                        0.458, 0.464, 0.46, false, false; 0.335, 0.335, 0.335, true, false; 13.2, 13.35, 13.3, false, false;...
-                        9.2, 9.6, 9.4, false, false};
+                    tableData = {-5e-4, -4e-4, -6e-4, false, false; 0, 0, 0, true, false; 0.18, 0.32, 0.24, false, false;...
+                        0.38, 0.48, 0.46, false, false; 0.335, 0.335, 0.335, true, false; 9, 15, 12, false, false;...
+                        8, 20, 12, false, false};
                     
                     h = 0.88;
                     
@@ -195,9 +195,6 @@ classdef XeRef < handle
                     
                     h = 0.42;
                     
-                    this.gui.quickFit = uicontrol(rightPanel,'Style','pushbutton','String', 'Quick Fit',...
-                        'Units','normalized', 'Position', [0.65 h-0.03 0.15 0.03]);
-                    
                     this.gui.loadPara = uicontrol(rightPanel,'Style','pushbutton','String','Load Para','Units','normalized',...
                         'Position',[0.024 h-0.03 0.17 0.03]);
                     
@@ -210,8 +207,14 @@ classdef XeRef < handle
                     this.gui.stepText = uicontrol(rightPanel,'Style','text','String','Steps','Units','normalized',...
                         'HorizontalAlignment','left','Position', [0.515 h-0.035 0.08 0.03]);
                     
-                    this.gui.fitButton = uicontrol(rightPanel,'Style','pushbutton','String','Fit','Units','normalized',...
+                    this.gui.angleFit = uicontrol(rightPanel,'Style','pushbutton','String', 'Angle Fit',...
+                        'Units','normalized', 'Position', [0.024 0.42 0.15 0.03]);
+                    
+                    this.gui.fitButton = uicontrol(rightPanel,'Style','pushbutton','String','Thorough Fit','Units','normalized',...
                         'Position',[0.82 h-0.03 0.15 0.03]);
+                    
+                    this.gui.quickFit = uicontrol(rightPanel,'Style','pushbutton','String', 'Quick Fit',...
+                        'Units','normalized', 'Position', [0.65 h-0.03 0.15 0.03]);
                     
                     this.gui.withText = uicontrol(rightPanel,'Style','text','String','With','Units','normalized','HorizontalAlignment','left',...
                         'Position',[0.025 h-0.065 0.07 0.03]);
@@ -285,6 +288,7 @@ classdef XeRef < handle
                 this.gui.fitButton.Callback = @(varargin) this.control('fit');
                 this.gui.updateStartButton.Callback = @(varargin) this.control('update-starts');
                 this.gui.quickFit.Callback = @(varargin) this.control('quick-fit');
+                this.gui.angleFit.Callback = @(varargin) this.control('angle-fit');
                 
             end
             
@@ -332,8 +336,8 @@ classdef XeRef < handle
                         case 'parameter-table'
                             eventdata = varargin{1};
                             [viewUpate, modelUpdate] = paraTableEditEntailsUpdate(eventdata);
+                            paras = readParameterTable();
                             if modelUpdate
-                                paras = readParameterTable();
                                 this.model(state, trigger, paras);
                             end
                             if viewUpate
@@ -347,7 +351,6 @@ classdef XeRef < handle
                                 this.model(state, trigger, t);
                                 this.view(state, trigger, t);
                             end
-                            
                         case 'fit'
                             refData = this.data{this.gui.dataFiles.Value(1)};
                             pData = readParameterTable();
@@ -355,6 +358,12 @@ classdef XeRef < handle
                             this.model(state, trigger, refData, pData, steps);
                             this.view(state, trigger);
                         case 'quick-fit'
+                            refData = this.data{this.gui.dataFiles.Value(1)};
+                            pData = readParameterTable();
+                            steps = str2double(this.gui.stepInput.String);
+                            this.model(state, trigger, refData, pData, steps);
+                            this.view(state, trigger);
+                        case 'angle-fit'
                             refData = this.data{this.gui.dataFiles.Value(1)};
                             pData = readParameterTable();
                             steps = str2double(this.gui.stepInput.String);
@@ -437,8 +446,10 @@ classdef XeRef < handle
                     case 3
                         if newData < table.Data{ind1, 1}
                             table.Data{ind1, 1} = newData;
+                            table.Data{ind1, 4} = false;
                         elseif newData > table.Data{ind1, 2}
                             table.Data{ind1, 2} = newData;
+                            table.Data{ind1, 4} = false;
                         end
                         viewUpdate = true;
                         modelUpdate = true;
@@ -570,6 +581,11 @@ classdef XeRef < handle
                             pData = varargin{2};
                             steps = varargin{3};
                             this.layers.fitDataQuick(refData, pData.p0, pData.lb, pData.ub, steps);
+                        case 'angle-fit'
+                            refData = varargin{1};
+                            pData = varargin{2};
+                            steps = varargin{3};
+                            this.layers.fitAngleGrid(refData, pData.p0, pData.lb, pData.ub, steps);
                         case 'update-starts'
                             paras = varargin{1};
                             this.layers.updateModel(paras);
@@ -671,7 +687,7 @@ classdef XeRef < handle
                             this.gui.showFit.Value = 1;
                             upperPlot();
                             recordFittingResults();
-                        case 'quick-fit'
+                        case {'quick-fit', 'angle-fit'}
                             this.gui.showFit.Value = 1;
                             upperPlot();
                             recordFittingResults();
@@ -688,7 +704,7 @@ classdef XeRef < handle
                             phi = varargin{2};
                             upperPlot();
                             lowerPlot(theta, phi);
-%                             plotEdProfile(this.gui.ax2);
+                            recordProteinDimension(theta, phi);
                         case 'show-protein'
                             if ~isempty(this.protein)
                                 this.gui.showEd.Value = ~ this.gui.showProtein.Value;
@@ -747,7 +763,7 @@ classdef XeRef < handle
                 table = this.gui.parametersTable;
                 if pro_on
                     new_row_names = {'Density'; 'Insertion'; 'Theta'; 'Phi'};
-                    new_data = {0, 5, 1, false, false; 0, 0, 0, true, false; 0, 180, 0, false, false; 0, 359, 0, false, false};
+                    new_data = {0, 5, 3, false, false; 0, 20, 0, false, false; 0, 180, 0, false, false; 0, 359, 0, false, false};
                     table.RowName = [table.RowName; new_row_names];
                     table.Data = [table.Data; new_data];
                 else
@@ -907,6 +923,8 @@ classdef XeRef < handle
                 
             end
             
+            % recording
+            
             function recordFittingResults()
                 
 %                 text = {};
@@ -936,6 +954,22 @@ classdef XeRef < handle
 %                 end
 %                 
 %                 this.gui.output.String = [text; this.gui.output.String];
+                
+            end
+            
+            function recordProteinDimension(theta, phi)
+                
+                d = this.layers.protein.dimension(theta, phi);
+                
+                text = cell(6, 1);
+                text{1} = this.textDivider();
+                text{2} = ['Protein dimension at theta = ', num2str(theta), ', phi = ', num2str(phi), ':'];
+                text{3} = ['x: ', num2str(d.x)];
+                text{4} = ['y: ', num2str(d.y)];
+                text{5} = ['z: ', num2str(d.z)];
+                text{6} = '';
+                
+                this.gui.output.String = [text; this.gui.output.String];
                 
             end
             
