@@ -210,7 +210,7 @@ classdef XeRef < handle
                     this.gui.angleFit = uicontrol(rightPanel,'Style','pushbutton','String', 'Angle Fit',...
                         'Units','normalized', 'Position', [0.024 0.42 0.15 0.03]);
                     
-                    this.gui.fitButton = uicontrol(rightPanel,'Style','pushbutton','String','Thorough Fit','Units','normalized',...
+                    this.gui.fitButton = uicontrol(rightPanel,'Style','pushbutton','String','Fit','Units','normalized',...
                         'Position',[0.82 h-0.03 0.15 0.03]);
                     
                     this.gui.quickFit = uicontrol(rightPanel,'Style','pushbutton','String', 'Quick Fit',...
@@ -501,12 +501,13 @@ classdef XeRef < handle
                 t.pro = this.gui.toggleProtein.Value;
                 
                 if t.pro
-                    n_layer = (m - 3) / 2;
-                    t.phi = t.p0(end);
-                    t.theta = t.p0(end - 1);
-                    t.insertion = t.p0(end - 2);
-                    t.density = t.p0(end - 3);
+                    n_layer = (m - 4) / 2;
+                    t.phi = t.p0(end - 1);
+                    t.theta = t.p0(end - 2);
+                    t.insertion = t.p0(end - 3);
+                    t.density = t.p0(end - 4);
                     t.protein = this.protein;
+                    t.inhomo = t.p0(end);
                 else
                     n_layer = (m + 1) / 2;
                 end
@@ -762,13 +763,13 @@ classdef XeRef < handle
                 
                 table = this.gui.parametersTable;
                 if pro_on
-                    new_row_names = {'Density'; 'Insertion'; 'Theta'; 'Phi'};
-                    new_data = {0, 5, 3, false, false; 0, 20, 0, false, false; 0, 180, 0, false, false; 0, 359, 0, false, false};
+                    new_row_names = {'Density'; 'Insertion'; 'Theta'; 'Phi'; 'Inhomogeneity'};
+                    new_data = {0, 5, 3, false, false; 0, 20, 0, false, false; 0, 180, 0, false, false; 0, 359, 0, false, false; 0, 0, 0, true, false};
                     table.RowName = [table.RowName; new_row_names];
                     table.Data = [table.Data; new_data];
                 else
-                    table.RowName = table.RowName(1 : end - 4);
-                    table.Data = table.Data(1 : end - 4, :);
+                    table.RowName = table.RowName(1 : end - 5);
+                    table.Data = table.Data(1 : end - 5, :);
                 end
                 
             end
@@ -897,7 +898,7 @@ classdef XeRef < handle
                 end
                 
                 xlabel(ax, '$$ Q_z(\AA^{-1}) $$', 'interpreter', 'latex', 'fontsize', 14);
-                legend(ax, legends, 'interpreter', 'tex');
+                legend(ax, legends, 'interpreter', 'none');
                 hold(ax, 'off');
                 
             end

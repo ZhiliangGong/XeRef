@@ -11,3 +11,10 @@ surf(Phi, Theta, this.layers.fits.angles.chi2);
 
 figure;
 contourf(Phi, Theta, this.layers.fits.angles.chi2);
+xlabel('\phi', 'fontsize', 16);
+ylabel('\theta', 'fontsize', 16);
+
+figure;
+surf(Phi, Theta, this.layers.fits.angles.chi2);
+xlabel('\phi', 'fontsize', 16);
+ylabel('\theta', 'fontsize', 16);

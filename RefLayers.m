@@ -18,6 +18,7 @@ classdef RefLayers < handle
         insertion = 0
         theta = 0
         phi = 0
+        inhomo = 0
         
     end
     
@@ -50,6 +51,7 @@ classdef RefLayers < handle
                 this.insertion = paras.insertion;
                 this.theta = paras.theta;
                 this.phi = paras.phi;
+                this.inhomo = paras.inhomo;
             else
                 this.protein = [];
             end
@@ -76,6 +78,16 @@ classdef RefLayers < handle
             qc = this.getQc();
             
             ref = this.parratt(this.profile.ed, this.profile.thickness, q + this.qoff, qc);
+            
+            if this.inhomo > 0 && this.inhomo <= 1
+%                 ed_lipid = [0.335 0.41 0.26 0];
+%                 thick_lipid = [Inf 8 14.36 Inf];
+                ed_lipid = [0.335 0.4427 0.3008 0];
+                thick_lipid = [Inf 8 14.36 Inf];
+                profile_lipid = this.calculateSmoothEdProfile(ed_lipid, thick_lipid, this.sigma, 0);
+                ref_lipid = this.parratt(profile_lipid.ed, profile_lipid.thickness, q + this.qoff, qc);
+                ref = this.inhomo * ref_lipid + (1 - this.inhomo) * ref;
+            end
             
         end
         
@@ -109,17 +121,17 @@ classdef RefLayers < handle
             if sum(sel) > 0
                 this.fitAll(refData, para_all, lb_all, ub_all);
                 this.fitParaOneByOne(refData, para_all, lb_all, ub_all, n_steps);
-                if sum(sel) > 1
-                    this.fitParaByPairs(refData, para_all, lb_all, ub_all, n_steps);
-                end
+%                 if sum(sel) > 1
+%                     this.fitParaByPairs(refData, para_all, lb_all, ub_all, n_steps);
+%                 end
             end
             
         end
         
         function fitAngleGrid(this, refData, para_all, lb_all, ub_all, n_steps)
             
-            if ~ isempty(this.protein) && sum(lb_all(end-1:end) == ub_all(end-1:end)) == 0
-                ind1 = length(para_all) - 1;
+            if ~ isempty(this.protein) && sum(lb_all(end-2:end-1) == ub_all(end-2:end-1)) == 0
+                ind1 = length(para_all) - 2;
                 ind2 = ind1 + 1;
                 if isempty(this.fits)
                     this.fitAll(refData, para_all, lb_all, ub_all);
@@ -134,7 +146,7 @@ classdef RefLayers < handle
             pro_flag = ~ isempty(this.protein);
             
             if pro_flag
-                n_layer = (length(para_all) - 3) / 2;
+                n_layer = (length(para_all) - 4) / 2;
                 pdb = this.protein.pdb;
                 gs = this.protein.gridSize;
             else
@@ -362,8 +374,9 @@ classdef RefLayers < handle
             % prepare for parfor loop
             chi2_mat = zeros(n_steps, n_steps);
             
-            options = this.options();
+            options = this.options('iter');
             
+            tic;
             parfor m = 1 : n_steps
                 para_range_2_par = para_range_2;
                 para_all_par = para_all;
@@ -387,6 +400,7 @@ classdef RefLayers < handle
                     
                 end
             end
+            toc;
             
             lk = chi2_mat;
             lk = exp(-(lk-min(lk(:)))/2);
@@ -612,21 +626,24 @@ classdef RefLayers < handle
             
             qoff = para_full(1);
             
+            pro_inhomo = 0;
+            
             if isempty(pdb)
                 n_layer = (length(para_full) + 1) / 2;
                 thick_coarse = [Inf, para_full(2 * n_layer - 1 : -1 : n_layer + 2), Inf];
                 ed_coarse = para_full(n_layer + 1 : -1 : 2);
                 z_origin = 0;
             else
-                n_layer = (length(para_full) - 3) / 2;
+                n_layer = (length(para_full) - 4) / 2;
                 
                 layer_thick = [Inf, para_full(2 * n_layer - 1 : -1 : n_layer + 2), Inf];
                 layer_ed = para_full(n_layer + 1 : -1 : 2);
                 
-                pro_phi = para_full(end);
-                pro_theta = para_full(end - 1);
-                pro_insertion = para_full(end - 2);
-                pro_density = para_full(end - 3);
+                pro_inhomo = para_full(end);
+                pro_phi = para_full(end - 1);
+                pro_theta = para_full(end - 2);
+                pro_insertion = para_full(end - 3);
+                pro_density = para_full(end - 4);
                 [pro_ed, pro_thick, pro_area] = RefProtein.calculateEdProfile(pdb.x, pdb.y, pdb.z, pdb.radius, pdb.electron, pro_theta, pro_phi, gs);
                 
                 [ed_coarse, thick_coarse, z_origin] = RefLayers.getCompositeEdProfile(layer_ed, layer_thick, pro_ed, pro_thick, pro_area, pro_density, pro_insertion);
@@ -638,6 +655,16 @@ classdef RefLayers < handle
             qc = RefLayers.calculateQc(ed_coarse(1), wl);
             
             ref = RefLayers.parratt(prof.ed, prof.thickness, q + qoff, qc);
+            
+            if pro_inhomo > 0 && pro_inhomo <= 1
+                ed_lipid = [0.335 0.4427 0.3008 0];
+                thick_lipid = [Inf 8 14.36 Inf];
+                profile_lipid = RefLayers.calculateSmoothEdProfile(ed_lipid, thick_lipid, sigma, 0);
+                ref_lipid = RefLayers.parratt(profile_lipid.ed, profile_lipid.thickness, q + qoff, qc);
+                ref = pro_inhomo * ref_lipid + (1 - pro_inhomo) * ref;
+            elseif pro_inhomo > 1
+                warning('The inhomogeneity parameter must be between 0 and 1. Ignoring this parameter.');
+            end
             
         end
         
@@ -701,11 +728,13 @@ classdef RefLayers < handle
         function names = getParaNames(n_layer, pro_flag)
             
             if pro_flag
-                names = cell(1, n_layer * 2 + 3);
-                names{end} = 'Phi';
-                names{end - 1} = 'Theta';
-                names{end - 2} = 'Insertion';
-                names{end - 3} = 'Density';
+                names = cell(1, n_layer * 2 + 4);
+                names(end -4 : end) = {'Density'; 'Insertion'; 'Theta'; 'Phi'; 'Inhomogeneity'};
+%                 names{end} = 'Inhomogeneity';
+%                 names{end - 1} = 'Phi';
+%                 names{end - 2} = 'Theta';
+%                 names{end - 3} = 'Insertion';
+%                 names{end - 4} = 'Density';
             else
                 names = cell(1, n_layer * 2 - 1);
             end
@@ -738,9 +767,18 @@ classdef RefLayers < handle
         
         % constants
         
-        function o = options()
+        function o = options(display)
             
-            o = optimoptions('lsqnonlin', 'MaxFunEvals', 1000, 'MaxIter', 1000, 'Display', 'none', 'UseParallel', true);
+            if nargin == 0
+                display = 'off';
+            end
+            
+            switch display
+                case 'iter'
+                    o = optimoptions('lsqnonlin', 'MaxFunEvals', 1000, 'MaxIter', 1000, 'Display', 'iter', 'UseParallel', true);
+                case 'off'
+                    o = optimoptions('lsqnonlin', 'MaxFunEvals', 1000, 'MaxIter', 1000, 'Display', 'none', 'UseParallel', true);
+            end
             
         end
         
