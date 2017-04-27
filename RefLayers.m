@@ -592,7 +592,7 @@ classdef RefLayers < handle
             indices = find(sel_overlap);
             composite_ed = zeros(size(pro_ed_new));
             for i = 1 : length(indices)
-                sel_between = pro_grid_bot_z_new >= layer_bot_z(indices(i)) & pro_grid_top_z_new <= layer_top_z(indices(i));
+                sel_between = pro_grid_bot_z_new + 1e-10 >= layer_bot_z(indices(i)) & pro_grid_top_z_new - 1e-10 <= layer_top_z(indices(i));
                 area_frac = pro_area_new(sel_between) * density / 1e4;
                 composite_ed(sel_between) = pro_ed_new(sel_between) .* area_frac + layer_ed(indices(i)) * (1 - area_frac);
             end
