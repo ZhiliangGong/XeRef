@@ -363,13 +363,14 @@ classdef RefLayers < handle
                 error('the indices of the parameter pair must not be the same.');
             end
             
+            result.chi2 = zeros(n_steps, n_steps);
+            result.para_names = this.fits.all.para_names_all([ind1, ind2]);
+            
             para_range_1 = linspace(lb_all(ind1), ub_all(ind1), n_steps);
             para_range_2 = linspace(lb_all(ind2), ub_all(ind2), n_steps);
             
             result.para_range_1 = para_range_1;
             result.para_range_2 = para_range_2;
-            result.chi2 = zeros(n_steps, n_steps);
-            result.para_names = this.fits.all.para_names_all([ind1, ind2]);
             
             % prepare for parfor loop
             chi2_mat = zeros(n_steps, n_steps);

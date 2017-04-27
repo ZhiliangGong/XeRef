@@ -764,7 +764,7 @@ classdef XeRef < handle
                 table = this.gui.parametersTable;
                 if pro_on
                     new_row_names = {'Density'; 'Insertion'; 'Theta'; 'Phi'; 'Inhomogeneity'};
-                    new_data = {0, 5, 3, false, false; 0, 20, 0, false, false; 0, 180, 0, false, false; 0, 359, 0, false, false; 0, 0, 0, true, false};
+                    new_data = {0, 5, 3, false, false; 0, 20, 0, false, false; 0, 180, 0, false, false; 0, 360, 0, false, false; 0, 0, 0, true, false};
                     table.RowName = [table.RowName; new_row_names];
                     table.Data = [table.Data; new_data];
                 else

@@ -194,6 +194,56 @@ classdef RefProtein < handle
             
         end
         
+        function plotEdProfile(this, theta, phi, ax)
+            
+            if nargin == 1
+                theta = 0;
+                phi = 0;
+            end
+            
+            if nargin < 4
+                figure;
+                ax = gca;
+            end
+            
+            [ed, thick, ~] = this.getEdProfile(theta, phi);
+            
+            z_pos = (0 : length(ed) - 1) * thick(1);
+            
+            hold(ax, 'on');
+            plot(ax, z_pos, ed, 'linewidth', 2);
+            xlabel('z (\AA)', 'interpreter', 'latex', 'fontsize', 16);
+            ylabel('$$ Electron Density (\AA^{-3}) $$', 'interpreter', 'latex', 'fontsize', 16);
+            set(ax, 'fontsize', 14);
+            hold(ax, 'off');
+            
+        end
+        
+        function plotAreaProfile(this, theta, phi, ax)
+            
+            if nargin == 1
+                theta = 0;
+                phi = 0;
+            end
+            
+            if nargin < 4
+                figure;
+                ax = gca;
+            end
+            
+            [~, thick, area] = this.getEdProfile(theta, phi);
+            
+            z_pos = (0 : length(area) - 1) * thick(1);
+            
+            hold(ax, 'on');
+            plot(ax, z_pos, area, 'linewidth', 2);
+            xlabel('z (\AA)', 'interpreter', 'latex', 'fontsize', 16);
+            ylabel('$$ Protein Area (\AA^{2}) $$', 'interpreter', 'latex', 'fontsize', 16);
+            set(ax, 'fontsize', 14);
+            hold(ax, 'off');
+            
+        end
+        
     end
     
     methods(Static)
@@ -319,9 +369,6 @@ classdef RefProtein < handle
             area = squeeze(sum(sum(Elec_grid > 0, 1), 2))' * gs^2;
             area(area == 0) = 1; % to avoid division by zero
             ed = squeeze(sum(sum(Elec_grid, 1), 2))' ./ area / gs;
-            
-            area = flipud(area);
-            ed = flipud(ed);
             
             sel_ed = ed > 0;
             ed = ed(sel_ed);
