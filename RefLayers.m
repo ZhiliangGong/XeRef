@@ -446,6 +446,25 @@ classdef RefLayers < handle
             
         end
         
+        % plot
+        
+        function plotEdProfile(this, ax)
+            
+            if nargin == 1 || isempty(ax)
+                figure;
+                ax = gca;
+            end
+            
+            plot(ax, this.profile.z, this.profile.layerEd, '-k', 'linewidth', 2);
+            hold(ax, 'on');
+            plot(ax, this.profile.z, this.profile.ed, '-b', 'linewidth', 2);
+            legend(ax, {'Layer Structure', 'Smoothed With Roughness'});
+            xlabel(ax, '$$ z (\AA) $$', 'interpreter', 'latex', 'fontsize', 14);
+            ylabel(ax, '$$ Electron Density (\AA^{-3}) $$', 'interpreter', 'latex', 'fontsize', 14);
+            hold(ax, 'off');
+            
+        end
+        
     end
     
     methods(Static)

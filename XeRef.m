@@ -164,7 +164,7 @@ classdef XeRef < handle
 %                     tableData = {-0.01, 0.01, 0, false, false; 0, 0, 0, true, false; 0.2, 0.3, 0.26, false, false;...
 %                         0.4, 0.5, 0.44, false, false; 0.335, 0.335, 0.335, true, false; 8, 16, 12, false, false;...
 %                         6, 14, 10, false, false};
-                    tableData = {-5e-4, -4e-4, -6e-4, false, false; 0, 0, 0, true, false; 0.18, 0.32, 0.24, false, false;...
+                    tableData = {-5e-4, 5e-4, 0, false, false; 0, 0, 0, true, false; 0.18, 0.32, 0.24, false, false;...
                         0.38, 0.48, 0.46, false, false; 0.335, 0.335, 0.335, true, false; 9, 15, 12, false, false;...
                         8, 20, 12, false, false};
                     
@@ -905,13 +905,15 @@ classdef XeRef < handle
             
             function plotEdProfile(ax)
                 
-                plot(ax, this.layers.profile.z, this.layers.profile.layerEd, '-k', 'linewidth', 2);
-                hold(ax, 'on');
-                plot(ax, this.layers.profile.z, this.layers.profile.ed, '-b', 'linewidth', 2);
-                legend(ax, {'Layer Structure', 'Smoothed With Roughness'});
-                xlabel(ax, '$$ z (\AA) $$', 'interpreter', 'latex', 'fontsize', 14);
-                ylabel(ax, '$$ Electron Density (\AA^{-3}) $$', 'interpreter', 'latex', 'fontsize', 14);
-                hold(ax, 'off');
+%                 plot(ax, this.layers.profile.z, this.layers.profile.layerEd, '-k', 'linewidth', 2);
+%                 hold(ax, 'on');
+%                 plot(ax, this.layers.profile.z, this.layers.profile.ed, '-b', 'linewidth', 2);
+%                 legend(ax, {'Layer Structure', 'Smoothed With Roughness'});
+%                 xlabel(ax, '$$ z (\AA) $$', 'interpreter', 'latex', 'fontsize', 14);
+%                 ylabel(ax, '$$ Electron Density (\AA^{-3}) $$', 'interpreter', 'latex', 'fontsize', 14);
+%                 hold(ax, 'off');
+                
+                this.layers.plotEdProfile(ax);
                 
             end
             
