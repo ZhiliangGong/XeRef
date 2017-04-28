@@ -931,7 +931,7 @@ classdef XeRef < handle
             function recordFittingResults()
                 
                 text = {};
-                if isfield(this.layers.fits, 'all')
+                if ~isempty(this.layers.fits) && isfield(this.layers.fits, 'all')
                     dat = this.layers.fits.all;
                     n = length(dat.para_fitted);
                     text_1 = cell(n+4, 1);
