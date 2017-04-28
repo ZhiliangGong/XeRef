@@ -486,7 +486,7 @@ classdef RefLayers < handle
             colorbar;
             xlabel('\phi (deg.)', 'fontsize', 24);
             ylabel('\theta (deg.)', 'fontsize', 24);
-            set(ax, 'fontsize', 20);
+            set(ax, 'fontsize', 24);
             
         end
         
@@ -701,8 +701,10 @@ classdef RefLayers < handle
             ref = RefLayers.parratt(prof.ed, prof.thickness, q + qoff, qc);
             
             if pro_inhomo > 0 && pro_inhomo <= 1
-                ed_lipid = [0.335 0.4427 0.3008 0];
-                thick_lipid = [Inf 8 14.36 Inf];
+                ed_lipid = ed_coarse;
+                thick_lipid = thick_coarse;
+%                 ed_lipid = [0.335 0.4427 0.3008 0];
+%                 thick_lipid = [Inf 8 14.36 Inf];
                 profile_lipid = RefLayers.calculateSmoothEdProfile(ed_lipid, thick_lipid, sigma, 0);
                 ref_lipid = RefLayers.parratt(profile_lipid.ed, profile_lipid.thickness, q + qoff, qc);
                 ref = pro_inhomo * ref_lipid + (1 - pro_inhomo) * ref;
