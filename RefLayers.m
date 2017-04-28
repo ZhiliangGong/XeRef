@@ -821,9 +821,9 @@ classdef RefLayers < handle
             
             switch display
                 case 'iter'
-                    o = optimoptions('lsqnonlin', 'MaxFunEvals', 1000, 'MaxIter', 1000, 'Display', 'iter', 'UseParallel', true);
+                    o = optimoptions('lsqnonlin', 'MaxFunEvals', 500, 'MaxIter', 500, 'Display', 'iter', 'UseParallel', true);
                 case 'off'
-                    o = optimoptions('lsqnonlin', 'MaxFunEvals', 1000, 'MaxIter', 1000, 'Display', 'none', 'UseParallel', true);
+                    o = optimoptions('lsqnonlin', 'MaxFunEvals', 500, 'MaxIter', 500, 'Display', 'none', 'UseParallel', true);
             end
             
         end
