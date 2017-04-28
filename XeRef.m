@@ -474,9 +474,10 @@ classdef XeRef < handle
                         if isfield(this.layers.fits, 'one') && this.layers.fits.all.fitted(ind1)
                             sel = cell2mat(table.Data(:, end));
                             num = sum(sel);
-                            if num >= 3
+                            if num >= 2
                                 indices = find(sel);
                                 indices = indices(indices ~= ind1);
+%                                 table.Data{indices(1), ind2} = false;
                                 table.Data{indices(1), ind2} = false;
                             end
                             viewUpdate = true;
