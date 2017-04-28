@@ -930,19 +930,19 @@ classdef XeRef < handle
             
             function recordFittingResults()
                 
-%                 text = {};
-%                 if isfield(this.layers.fits, 'all')
-%                     dat = this.layers.fits.all;
-%                     n = length(dat.para_fitted);
-%                     text_1 = cell(n+4, 1);
-%                     text_1{1} = this.textDivider();
-%                     text_1{2} = 'Global fit result: ';
-%                     text_1{3} = '';
-%                     text_1{4} = ['Chi^2: ', num2str(dat.chi2)];
-%                     for i = 1 : n
-%                         text_1{i+4} = [dat.para_names_fitted{i}, ': ', num2str(dat.para_fitted(i))];
-%                     end
-%                     text = [text; text_1];
+                text = {};
+                if isfield(this.layers.fits, 'all')
+                    dat = this.layers.fits.all;
+                    n = length(dat.para_fitted);
+                    text_1 = cell(n+4, 1);
+                    text_1{1} = this.textDivider();
+                    text_1{2} = 'Global fit result: ';
+                    text_1{3} = '';
+                    text_1{4} = ['Chi^2: ', num2str(dat.chi2)];
+                    for i = 1 : n
+                        text_1{i+4} = [dat.para_names_fitted{i}, ': ', num2str(dat.para_fitted(i))];
+                    end
+                    text = [text; text_1];
 %                     if isfield(this.layers.fits, 'one') && ~ isempty(this.layers.fits.one)
 %                         dat = this.layers.fits.one;
 %                         text_2 = cell(n+3, 1);
@@ -954,9 +954,9 @@ classdef XeRef < handle
 %                         end
 %                         text = [text; text_2];
 %                     end
-%                 end
-%                 
-%                 this.gui.output.String = [text; this.gui.output.String];
+                end
+                
+                this.gui.output.String = [text; this.gui.output.String];
                 
             end
             
