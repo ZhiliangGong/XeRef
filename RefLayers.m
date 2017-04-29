@@ -466,21 +466,34 @@ classdef RefLayers < handle
             
         end
         
-        function h = plotAngleChi2(this, levels, ax)
+        function h = plotAngleChi2(this, min_subtract, levels, ax)
             
-            if nargin < 3 || isempty(ax)
+            if nargin < 4 || isempty(ax)
                 h = figure;
                 ax = gca;
+                if nargin < 2 || isempty(min_subtract)
+                    min_subtract = 0;
+                end
             else
                 h = 0;
             end
             
             [Phi, Theta] = meshgrid(this.fits.angles.para_range_2, this.fits.angles.para_range_1);
             
-            if nargin < 2 || isempty(levels)
-                contourf(ax, Phi, Theta, this.fits.angles.chi2);
-            else
-                contourf(ax, Phi, Theta, this.fits.angles.chi2, levels);
+            switch min_subtract
+                case 0
+                    if nargin < 3 || isempty(levels)
+                        contourf(ax, Phi, Theta, this.fits.angles.chi2);
+                    else
+                        contourf(ax, Phi, Theta, this.fits.angles.chi2, levels);
+                    end
+                case 1
+                    min_chi2 = min(this.fits.angles.chi2(:));
+                    if nargin < 3 || isempty(levels)
+                        contourf(ax, Phi, Theta, this.fits.angles.chi2 - min_chi2);
+                    else
+                        contourf(ax, Phi, Theta, this.fits.angles.chi2 - min_chi2, levels);
+                    end
             end
             
             colorbar;
