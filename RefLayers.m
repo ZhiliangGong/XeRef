@@ -447,6 +447,13 @@ classdef RefLayers < handle
             
         end
         
+        function c = getCoverage(this)
+            
+            [~, ~, area] = this.protein.getEdProfile(this.theta, this.phi);
+            c = this.density * max(area) / 100;
+            
+        end
+        
         % plot
         
         function plotEdProfile(this, ax)
