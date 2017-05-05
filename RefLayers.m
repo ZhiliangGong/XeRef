@@ -510,6 +510,87 @@ classdef RefLayers < handle
             
         end
         
+        function h = plotAngleReducedChi2(this, levels, ax)
+            
+            if nargin < 3 || isempty(ax)
+                h = figure;
+                ax = gca;
+            else
+                h = 0;
+            end
+            
+            [Phi, Theta] = meshgrid(this.fits.angles.para_range_2, this.fits.angles.para_range_1);
+            
+            n = sum(this.fits.all.fitted);
+            k = length(this.fits.all.ref) - n + 2;
+            chi2 = this.fits.angles.chi2 / k;
+            
+            if nargin < 2 || isempty(levels)
+                contourf(ax, Phi, Theta, chi2);
+            else
+                contourf(ax, Phi, Theta, chi2, levels);
+            end
+            
+            colorbar;
+            xlabel('\phi (deg.)', 'fontsize', 24);
+            ylabel('\theta (deg.)', 'fontsize', 24);
+            set(ax, 'fontsize', 24);
+            
+        end
+        
+        function ax = plot2DCoarseEdProfile(this, width, ax)
+            
+            if nargin < 3 || isempty(ax)
+                figure;
+                ax = gca;
+                if nargin < 2
+                    width = 50;
+                end
+            end
+            
+            p = this.profile;
+            N = 100;
+            x = linspace(0, width, N);
+            [X, Z] = meshgrid(p.z, x);
+            
+            ed_2d = repmat(p.ed, N, 1);
+            
+            levels = this.ed(end-1): 0.01 : 0.5;
+            contourf(ax, Z, X, ed_2d, levels);
+            colorbar;
+            set(ax, 'fontsize', 22);
+            ylabel('z (\AA)', 'interpreter', 'latex', 'fontsize', 24);
+            xlabel('x (\AA)', 'interpreter', 'latex', 'fontsize', 24);
+            
+        end
+        
+        function ax = plot2DFineEdProfile(this, width, ax)
+            
+            if nargin < 3 || isempty(ax)
+                figure;
+                ax = gca;
+                if nargin < 2
+                    width = 50;
+                end
+            end
+            
+            p = this.profile;
+            N = 10;
+            x = linspace(0, width, N);
+            [X, Z] = meshgrid(p.z, x);
+            
+            ed_2d = repmat(p.ed, N, 1);
+            
+            levels = [0.02: 0.01 : 0.34, 0.341:0.001:0.5];
+            [~, ch] = contourf(ax, Z, X, ed_2d, levels);
+            colorbar;
+            set(ax, 'fontsize', 22);
+            set(ch, 'edgecolor', 'none');
+            xlabel('x (\AA)', 'interpreter', 'latex', 'fontsize', 24);
+            ylabel('z (\AA)', 'interpreter', 'latex', 'fontsize', 24);
+            
+        end
+        
     end
     
     methods(Static)

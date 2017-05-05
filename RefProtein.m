@@ -104,6 +104,34 @@ classdef RefProtein < handle
             
         end
         
+        function d = getAreaEdProfile(this, theta, phi)
+            
+            if nargin == 1
+                theta = 0;
+                phi = 0;
+            end
+            
+            [ed, thick, area] = this.getEdProfile(theta, phi);
+            
+            d.z = (0 : length(area) - 1) * thick(1);
+            d.ed = ed;
+            d.area = area;
+            
+        end
+        
+        function a = getProjectionArea(this, theta, phi)
+            
+            if nargin == 1
+                theta = 0;
+                phi = 0;
+            end
+            
+            [~, ~, area] = this.getEdProfile(theta, phi);
+            
+            a = max(area);
+            
+        end
+        
         % plot
         
         function visualize(this, ax, theta, phi, sel_emphasize)
@@ -181,15 +209,15 @@ classdef RefProtein < handle
             switch type
                 case 'surf'
                     surf(ax, Phi, Theta, heights);
-                    xlabel(ax, '\phi (deg.)', 'fontsize', 16);
-                    ylabel(ax, '\theta (deg.)', 'fontsize', 16);
-                    zlabel(ax, 'Height (\AA)', 'fontsize', 16, 'interpreter', 'latex');
-                    set(ax, 'fontsize', 14, 'ylim', [0 180], 'ytick', (0 : 60 : 180), 'xlim', [0 360], 'xtick', (0 : 60 : 360));
+                    xlabel(ax, '\phi (deg.)', 'fontsize', 24);
+                    ylabel(ax, '\theta (deg.)', 'fontsize', 24);
+                    zlabel(ax, 'Height (\AA)', 'fontsize', 24, 'interpreter', 'latex');
+                    set(ax, 'fontsize', 24, 'ylim', [0 180], 'ytick', (0 : 60 : 180), 'xlim', [0 360], 'xtick', (0 : 60 : 360));
                 case 'contour'
                     contourf(ax, Phi, Theta, heights);
-                    xlabel(ax, '\phi (deg.)', 'fontsize', 16);
-                    ylabel(ax, '\theta (deg.)', 'fontsize', 16);
-                    set(ax, 'fontsize', 14, 'ylim', [0 180], 'ytick', (0 : 60 : 180), 'xlim', [0 360], 'xtick', (0 : 60 : 360));
+                    xlabel(ax, '\phi (deg.)', 'fontsize', 24);
+                    ylabel(ax, '\theta (deg.)', 'fontsize', 24);
+                    set(ax, 'fontsize', 24, 'ylim', [0 180], 'ytick', (0 : 60 : 180), 'xlim', [0 360], 'xtick', (0 : 60 : 360));
             end
             
         end
